@@ -41,8 +41,8 @@ export async function GET(request: Request) {
         status = "offline";
       }
 
-      // 4. Registrar Log
-      await supabase.from("uptime_logs").insert({
+      // 4. Registrar Log PRIMEIRO
+      const { error: logError } = await supabase.from("uptime_logs").insert({
         user_id: domain.user_id,
         domain_id: domain.id,
         status,
@@ -50,7 +50,14 @@ export async function GET(request: Request) {
         checked_at: new Date().toISOString(),
       });
 
-      // 5. CALCULAR UPTIME REAL baseado em todos os logs
+      if (logError) {
+        console.error(`Error inserting log for ${domain.url}:`, logError);
+      }
+
+      // Aguardar um pouco para garantir que o log foi salvo no banco
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // 5. CALCULAR UPTIME REAL baseado em TODOS os logs (incluindo o que acabou de ser salvo)
       const { data: allLogs, error: logsError } = await supabase
         .from("uptime_logs")
         .select("status")
@@ -63,12 +70,16 @@ export async function GET(request: Request) {
       }
 
       // 6. Atualizar o domínio com status, uptime real e tempo de resposta
-      await supabase.from("domains").update({ 
+      const { error: updateError } = await supabase.from("domains").update({ 
         status, 
         uptime: uptimePercentage,
         response_time: responseTime,
         last_checked_at: new Date().toISOString() 
       }).eq("id", domain.id);
+
+      if (updateError) {
+        console.error(`Error updating domain ${domain.url}:`, updateError);
+      }
 
       // 7. CRIAR ALERTA se o status mudou
       let alertMessage = "";
@@ -92,19 +103,25 @@ export async function GET(request: Request) {
 
       // 8. SALVAR ALERTA no banco de dados
       if (alertMessage) {
-        await supabase.from("alerts").insert({
+        const { error: alertError } = await supabase.from("alerts").insert({
           user_id: domain.user_id,
           domain_id: domain.id,
           type: alertType,
           message: alertMessage,
           created_at: new Date().toISOString(),
         });
+
+        if (alertError) {
+          console.error(`Error inserting alert for ${domain.url}:`, alertError);
+        }
       }
 
-      // 9. ENVIAR NOTIFICAÇÃO WHATSAPP (apenas para alertas críticos)
+      // 9. ENVIAR NOTIFICAÇÃO WHATSAPP (apenas para alertas críticos - site offline)
       if (status === "offline" && domain.profiles?.twilio_sid && domain.profiles?.twilio_token) {
         const p = domain.profiles;
         try {
+          console.log(`Attempting to send WhatsApp alert for ${domain.url}`);
+          
           const auth = Buffer.from(`${p.twilio_sid}:${p.twilio_token}`).toString('base64');
           const whatsappTo = p.whatsapp_number.startsWith('whatsapp:') 
             ? p.whatsapp_number 
@@ -113,7 +130,7 @@ export async function GET(request: Request) {
             ? p.twilio_from 
             : `whatsapp:${p.twilio_from}`;
 
-          const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${p.twilio_sid}/Messages.json`, {
+          const twilioResponse = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${p.twilio_sid}/Messages.json`, {
             method: 'POST',
             headers: {
               'Authorization': `Basic ${auth}`,
@@ -126,10 +143,11 @@ export async function GET(request: Request) {
             }).toString()
           });
 
-          if (!response.ok) {
-            console.error(`Twilio error for ${domain.url}:`, response.statusText);
+          if (!twilioResponse.ok) {
+            const errorText = await twilioResponse.text();
+            console.error(`Twilio error for ${domain.url}:`, twilioResponse.status, errorText);
           } else {
-            console.log(`WhatsApp alert sent for ${domain.url}`);
+            console.log(`✅ WhatsApp alert sent successfully for ${domain.url}`);
           }
         } catch (wsError) {
           console.error("Erro ao enviar Twilio:", wsError);
