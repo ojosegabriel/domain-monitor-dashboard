@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     // 2. Buscar todos os domínios ativos para monitoramento
     const { data: domains, error: domainsError } = await supabase
       .from("domains")
-      .select("*, profiles(whatsapp_number, twilio_sid, twilio_token, twilio_from)");
+      .select("*");
 
     if (domainsError) throw domainsError;
 
@@ -81,27 +81,31 @@ export async function GET(request: Request) {
         console.error(`Error updating domain ${domain.url}:`, updateError);
       }
 
-      // 7. CRIAR ALERTA se o status mudou
+      // 7. CRIAR ALERTA APENAS SE O STATUS MUDOU
       let alertMessage = "";
       let alertType: "down" | "up" | "slow" = "down";
+      let shouldSendWhatsApp = false;
 
       // Se mudou de ONLINE para OFFLINE
       if (previousStatus === "online" && status === "offline") {
         alertMessage = `🚨 Site fora do ar! O domínio ${domain.url} caiu.`;
         alertType = "down";
+        shouldSendWhatsApp = true; // ✅ ENVIAR WHATSAPP APENAS NESTE CASO
       }
       // Se mudou de OFFLINE para ONLINE (recuperado)
       else if (previousStatus === "offline" && status === "online") {
         alertMessage = `✅ Site recuperado! O domínio ${domain.url} está online novamente.`;
         alertType = "up";
+        shouldSendWhatsApp = false; // Não enviar WhatsApp para recuperação
       }
       // Se está muito lento (response time > 5s)
       else if (status === "online" && responseTime > 5000) {
         alertMessage = `⚠️ Site lento! O domínio ${domain.url} levou ${responseTime}ms para responder.`;
         alertType = "slow";
+        shouldSendWhatsApp = false; // Não enviar WhatsApp para sites lentos
       }
 
-      // 8. SALVAR ALERTA no banco de dados
+      // 8. SALVAR ALERTA no banco de dados (apenas se houver mudança)
       if (alertMessage) {
         const { error: alertError } = await supabase.from("alerts").insert({
           user_id: domain.user_id,
@@ -116,41 +120,52 @@ export async function GET(request: Request) {
         }
       }
 
-      // 9. ENVIAR NOTIFICAÇÃO WHATSAPP (apenas para alertas críticos - site offline)
-      if (status === "offline" && domain.profiles?.twilio_sid && domain.profiles?.twilio_token) {
-        const p = domain.profiles;
-        try {
-          console.log(`Attempting to send WhatsApp alert for ${domain.url}`);
-          
-          const auth = Buffer.from(`${p.twilio_sid}:${p.twilio_token}`).toString('base64');
-          const whatsappTo = p.whatsapp_number.startsWith('whatsapp:') 
-            ? p.whatsapp_number 
-            : `whatsapp:${p.whatsapp_number}`;
-          const whatsappFrom = p.twilio_from.startsWith('whatsapp:') 
-            ? p.twilio_from 
-            : `whatsapp:${p.twilio_from}`;
+      // 9. ENVIAR WHATSAPP APENAS UMA VEZ (quando status muda de online para offline)
+      if (shouldSendWhatsApp && domain.user_id) {
+        // Buscar credenciais do Twilio
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("whatsapp_number, twilio_sid, twilio_token, twilio_from")
+          .eq("id", domain.user_id)
+          .single();
 
-          const twilioResponse = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${p.twilio_sid}/Messages.json`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Basic ${auth}`,
-              'Content-Type': 'application/x-www-form-urlencoded'
-            },
-            body: new URLSearchParams({
-              To: whatsappTo,
-              From: whatsappFrom,
-              Body: `🚨 *ALERTA TCC* 🚨\n\nO site *${domain.url}* caiu!\nVerificado em: ${new Date().toLocaleString('pt-BR')}\nUptime: ${uptimePercentage}%`
-            }).toString()
-          });
+        if (profile?.twilio_sid && profile?.twilio_token) {
+          const p = profile;
+          try {
+            console.log(`🚀 Sending WhatsApp alert for ${domain.url}`);
+            
+            const auth = Buffer.from(`${p.twilio_sid}:${p.twilio_token}`).toString('base64');
+            const whatsappTo = p.whatsapp_number.startsWith('whatsapp:') 
+              ? p.whatsapp_number 
+              : `whatsapp:${p.whatsapp_number}`;
+            const whatsappFrom = p.twilio_from.startsWith('whatsapp:') 
+              ? p.twilio_from 
+              : `whatsapp:${p.twilio_from}`;
 
-          if (!twilioResponse.ok) {
-            const errorText = await twilioResponse.text();
-            console.error(`Twilio error for ${domain.url}:`, twilioResponse.status, errorText);
-          } else {
-            console.log(`✅ WhatsApp alert sent successfully for ${domain.url}`);
+            const twilioResponse = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${p.twilio_sid}/Messages.json`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Basic ${auth}`,
+                'Content-Type': 'application/x-www-form-urlencoded'
+              },
+              body: new URLSearchParams({
+                To: whatsappTo,
+                From: whatsappFrom,
+                Body: `🚨 *ALERTA TCC* 🚨\n\nO site *${domain.url}* caiu!\nVerificado em: ${new Date().toLocaleString('pt-BR')}\nUptime: ${uptimePercentage}%`
+              }).toString()
+            });
+
+            if (!twilioResponse.ok) {
+              const errorText = await twilioResponse.text();
+              console.error(`❌ Twilio error for ${domain.url}:`, twilioResponse.status, errorText);
+            } else {
+              console.log(`✅ WhatsApp alert sent successfully for ${domain.url}`);
+            }
+          } catch (wsError) {
+            console.error("❌ Erro ao enviar Twilio:", wsError);
           }
-        } catch (wsError) {
-          console.error("Erro ao enviar Twilio:", wsError);
+        } else {
+          console.warn(`⚠️ Twilio credentials missing for user ${domain.user_id}`);
         }
       }
 
