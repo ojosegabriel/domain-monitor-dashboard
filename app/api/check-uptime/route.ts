@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
-  // 1. Segurança: Verifica se a chamada veio do Cron da Vercel ou se é um teste manual
+  // 1. Segurança: Verifica se a chamada tem o token correto
   const authHeader = request.headers.get('authorization');
-  if (process.env.NODE_ENV === 'production' && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const tokenEsperado = `Bearer ${process.env.CRON_SECRET}`;
+  
+  // ✅ Aceita tanto o token da Vercel quanto do EasyCron
+  if (authHeader !== tokenEsperado) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
