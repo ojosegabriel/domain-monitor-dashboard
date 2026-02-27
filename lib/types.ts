@@ -8,6 +8,7 @@ export interface Domain {
   response_time: number
   check_interval: number
   last_checked_at: string
+  ssl_expiry_date: string | null
   created_at: string
 }
 

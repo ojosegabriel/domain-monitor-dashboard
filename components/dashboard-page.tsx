@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
-import { Plus, Search, Menu, X } from "lucide-react"
+import { Plus, Search, Menu, X, AlertTriangle, CheckCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DashboardSidebar } from "@/components/dashboard-sidebar"
@@ -154,6 +154,30 @@ export function DashboardPage({ user, profile, initialDomains, initialAlerts }: 
     router.push("/auth/login")
   }
 
+  // Função auxiliar para verificar se o SSL está expirando em breve (próximos 30 dias)
+  function isSSLExpiringSoon(expiryDate: string | null): boolean {
+    if (!expiryDate) return false
+    const expiry = new Date(expiryDate)
+    const now = new Date()
+    const daysUntilExpiry = (expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+    return daysUntilExpiry <= 30 && daysUntilExpiry > 0
+  }
+
+  // Função auxiliar para verificar se o SSL já expirou
+  function isSSLExpired(expiryDate: string | null): boolean {
+    if (!expiryDate) return false
+    const expiry = new Date(expiryDate)
+    const now = new Date()
+    return expiry.getTime() < now.getTime()
+  }
+
+  // Função auxiliar para formatar a data
+  function formatDate(dateString: string | null): string {
+    if (!dateString) return "N/A"
+    const date = new Date(dateString)
+    return date.toLocaleDateString("pt-BR", { year: "numeric", month: "long", day: "numeric" })
+  }
+
   function renderContent() {
     switch (activeTab) {
       case "broken-links":
@@ -163,7 +187,7 @@ export function DashboardPage({ user, profile, initialDomains, initialAlerts }: 
         return <AlertHistory alerts={alerts} />
 
       case "settings":
-        return <SettingsPage user={user} profile={profile} />
+        return <SettingsPage profile={profile} />
 
       case "dashboard":
       default:
@@ -199,6 +223,63 @@ export function DashboardPage({ user, profile, initialDomains, initialAlerts }: 
             </div>
 
             <DomainList domains={filteredDomains} onDelete={handleDeleteDomain} onEdit={openEditDomainModal} />
+
+            {/* Card de SSL - Exibido se houver domínios com informações de SSL */}
+            {selectedDomain && selectedDomain.ssl_expiry_date && (
+              <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start gap-4">
+                    {isSSLExpired(selectedDomain.ssl_expiry_date) ? (
+                      <AlertTriangle className="h-6 w-6 text-red-500 flex-shrink-0 mt-1" />
+                    ) : isSSLExpiringSoon(selectedDomain.ssl_expiry_date) ? (
+                      <AlertTriangle className="h-6 w-6 text-yellow-500 flex-shrink-0 mt-1" />
+                    ) : (
+                      <CheckCircle className="h-6 w-6 text-green-500 flex-shrink-0 mt-1" />
+                    )}
+                    <div>
+                      <h3 className="text-lg font-semibold text-foreground">SSL Certificate Status</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {selectedDomain.name}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="rounded-md bg-muted/50 p-3">
+                    <p className="text-xs font-medium text-muted-foreground">Expiry Date</p>
+                    <p className="mt-1 text-sm font-semibold text-foreground">
+                      {formatDate(selectedDomain.ssl_expiry_date)}
+                    </p>
+                  </div>
+
+                  <div className="rounded-md bg-muted/50 p-3">
+                    <p className="text-xs font-medium text-muted-foreground">Status</p>
+                    <p className="mt-1 text-sm font-semibold">
+                      {isSSLExpired(selectedDomain.ssl_expiry_date) ? (
+                        <span className="text-red-500">🔴 Expired</span>
+                      ) : isSSLExpiringSoon(selectedDomain.ssl_expiry_date) ? (
+                        <span className="text-yellow-500">🟡 Expiring Soon (30 days)</span>
+                      ) : (
+                        <span className="text-green-500">🟢 Valid</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                {isSSLExpired(selectedDomain.ssl_expiry_date) && (
+                  <div className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-800 border border-red-200">
+                    ⚠️ Your SSL certificate has expired. Please renew it immediately to maintain secure connections.
+                  </div>
+                )}
+
+                {isSSLExpiringSoon(selectedDomain.ssl_expiry_date) && (
+                  <div className="mt-4 rounded-md bg-yellow-50 p-3 text-sm text-yellow-800 border border-yellow-200">
+                    ⚠️ Your SSL certificate will expire soon. Please renew it before the expiry date.
+                  </div>
+                )}
+              </div>
+            )}
 
             <UptimeChart data={uptimeChartData} />
           </div>
