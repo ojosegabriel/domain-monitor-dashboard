@@ -25,6 +25,7 @@ export async function GET(request: Request) {
       const startTime = Date.now();
       let status: "online" | "offline" = "offline";
       let responseTime = 0;
+      let previousStatus = domain.status; // Guardar status anterior para comparação
 
       try {
         const response = await fetch(domain.url, {
@@ -40,7 +41,7 @@ export async function GET(request: Request) {
         status = "offline";
       }
 
-      // 4. Registrar Log e Atualizar Domínio
+      // 4. Registrar Log
       await supabase.from("uptime_logs").insert({
         user_id: domain.user_id,
         domain_id: domain.id,
@@ -49,39 +50,102 @@ export async function GET(request: Request) {
         checked_at: new Date().toISOString(),
       });
 
+      // 5. CALCULAR UPTIME REAL baseado em todos os logs
+      const { data: allLogs, error: logsError } = await supabase
+        .from("uptime_logs")
+        .select("status")
+        .eq("domain_id", domain.id);
+
+      let uptimePercentage = 100;
+      if (allLogs && allLogs.length > 0) {
+        const onlineCount = allLogs.filter(log => log.status === "online").length;
+        uptimePercentage = parseFloat(((onlineCount / allLogs.length) * 100).toFixed(1));
+      }
+
+      // 6. Atualizar o domínio com status, uptime real e tempo de resposta
       await supabase.from("domains").update({ 
         status, 
+        uptime: uptimePercentage,
         response_time: responseTime,
         last_checked_at: new Date().toISOString() 
       }).eq("id", domain.id);
 
-      // 5. Se estiver OFFLINE, dispara o WhatsApp usando os dados do Profile
-      if (status === "offline" && domain.profiles?.twilio_sid) {
+      // 7. CRIAR ALERTA se o status mudou
+      let alertMessage = "";
+      let alertType: "down" | "up" | "slow" = "down";
+
+      // Se mudou de ONLINE para OFFLINE
+      if (previousStatus === "online" && status === "offline") {
+        alertMessage = `🚨 Site fora do ar! O domínio ${domain.url} caiu.`;
+        alertType = "down";
+      }
+      // Se mudou de OFFLINE para ONLINE (recuperado)
+      else if (previousStatus === "offline" && status === "online") {
+        alertMessage = `✅ Site recuperado! O domínio ${domain.url} está online novamente.`;
+        alertType = "up";
+      }
+      // Se está muito lento (response time > 5s)
+      else if (status === "online" && responseTime > 5000) {
+        alertMessage = `⚠️ Site lento! O domínio ${domain.url} levou ${responseTime}ms para responder.`;
+        alertType = "slow";
+      }
+
+      // 8. SALVAR ALERTA no banco de dados
+      if (alertMessage) {
+        await supabase.from("alerts").insert({
+          user_id: domain.user_id,
+          domain_id: domain.id,
+          type: alertType,
+          message: alertMessage,
+          created_at: new Date().toISOString(),
+        });
+      }
+
+      // 9. ENVIAR NOTIFICAÇÃO WHATSAPP (apenas para alertas críticos)
+      if (status === "offline" && domain.profiles?.twilio_sid && domain.profiles?.twilio_token) {
         const p = domain.profiles;
         try {
           const auth = Buffer.from(`${p.twilio_sid}:${p.twilio_token}`).toString('base64');
-          await fetch(`https://api.twilio.com/2010-04-01/Accounts/${p.twilio_sid}/Messages.json`, {
+          const whatsappTo = p.whatsapp_number.startsWith('whatsapp:') 
+            ? p.whatsapp_number 
+            : `whatsapp:${p.whatsapp_number}`;
+          const whatsappFrom = p.twilio_from.startsWith('whatsapp:') 
+            ? p.twilio_from 
+            : `whatsapp:${p.twilio_from}`;
+
+          const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${p.twilio_sid}/Messages.json`, {
             method: 'POST',
             headers: {
               'Authorization': `Basic ${auth}`,
               'Content-Type': 'application/x-www-form-urlencoded'
             },
             body: new URLSearchParams({
-              To: p.whatsapp_number.startsWith('whatsapp:' ) ? p.whatsapp_number : `whatsapp:${p.whatsapp_number}`,
-              From: p.twilio_from.startsWith('whatsapp:') ? p.twilio_from : `whatsapp:${p.twilio_from}`,
-              Body: `🚨 *ALERTA TCC* 🚨\n\nO site *${domain.url}* caiu!\nVerificado em: ${new Date().toLocaleString('pt-BR')}`
+              To: whatsappTo,
+              From: whatsappFrom,
+              Body: `🚨 *ALERTA TCC* 🚨\n\nO site *${domain.url}* caiu!\nVerificado em: ${new Date().toLocaleString('pt-BR')}\nUptime: ${uptimePercentage}%`
             }).toString()
           });
+
+          if (!response.ok) {
+            console.error(`Twilio error for ${domain.url}:`, response.statusText);
+          } else {
+            console.log(`WhatsApp alert sent for ${domain.url}`);
+          }
         } catch (wsError) {
-          console.error("Erro Twilio:", wsError);
+          console.error("Erro ao enviar Twilio:", wsError);
         }
       }
 
-      results.push({ url: domain.url, status });
+      results.push({ url: domain.url, status, uptime: uptimePercentage });
     }
 
-    return NextResponse.json({ message: "Check completed", results });
+    return NextResponse.json({ 
+      message: "Check completed successfully", 
+      results,
+      timestamp: new Date().toISOString()
+    });
   } catch (error: any) {
+    console.error("Error in check-uptime:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
