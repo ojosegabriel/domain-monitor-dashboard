@@ -1,0 +1,28 @@
+name: Domain Monitor Check Uptime
+
+on:
+  schedule:
+    # Executa a cada 5 minutos
+    - cron: "*/5 * * * *"
+  # Permite executar manualmente
+  workflow_dispatch:
+
+jobs:
+  check-uptime:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check Domain Uptime
+        run: |
+          curl -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            "https://domain-monitor-dashboard.vercel.app/api/check-uptime"
+
+      - name: Log Success
+        if: success( )
+        run: echo "✅ Domain check completed successfully at $(date)"
+
+      - name: Log Failure
+        if: failure()
+        run: echo "❌ Domain check failed at $(date)"
