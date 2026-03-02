@@ -36,11 +36,13 @@ export async function GET(request: Request) {
         const startTime = Date.now();
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
+
         const response = await fetch(domain.url, {
           method: "GET",
-          redirect: "follow",
           signal: controller.signal,
+          redirect: "follow",
         });
+
         clearTimeout(timeoutId);
         responseTime = Date.now() - startTime;
 
@@ -57,13 +59,19 @@ export async function GET(request: Request) {
 
             // Usar a API do Supabase para verificar SSL
             const sslController = new AbortController();
-            const sslTimeoutId = setTimeout(() => sslController.abort(), 5000);
+            const sslTimeoutId = setTimeout(
+              () => sslController.abort(),
+              5000
+            );
+
             const sslCheckResponse = await fetch(
               `https://ssl-api.com/api/v3/certinfo?host=${hostname}`,
               { signal: sslController.signal }
-            ).catch(() => null).finally(() => clearTimeout(sslTimeoutId));
+            );
 
-            if (sslCheckResponse?.ok) {
+            clearTimeout(sslTimeoutId);
+
+            if (sslCheckResponse.ok) {
               const sslData = await sslCheckResponse.json();
               if (sslData.certs && sslData.certs[0]) {
                 const certInfo = sslData.certs[0];
