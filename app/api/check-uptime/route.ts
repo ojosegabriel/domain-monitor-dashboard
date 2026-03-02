@@ -3,11 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
   // 1. Segurança: Verifica se a chamada tem o token correto
-  const authHeader = request.headers.get('authorization');
+  const authHeader = request.headers.get("authorization");
   const tokenEsperado = `Bearer ${process.env.CRON_SECRET}`;
-  
-  // ✅ Aceita tanto o token da Vercel quanto do EasyCron
-  if (authHeader !== tokenEsperado) {
+
+  if (process.env.NODE_ENV === "production" && authHeader !== tokenEsperado) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -20,31 +19,69 @@ export async function GET(request: Request) {
       .select("*");
 
     if (domainsError) throw domainsError;
+    if (!domains || domains.length === 0) {
+      return NextResponse.json({ message: "Nenhum domínio para verificar" });
+    }
 
     const results = [];
 
     // 3. Loop para verificar cada domínio
     for (const domain of domains) {
-      const startTime = Date.now();
-      let status: "online" | "offline" = "offline";
+      let status = "online";
       let responseTime = 0;
-      let previousStatus = domain.status; // Guardar status anterior para comparação
+      let sslExpiry: Date | null = null;
 
       try {
+        // 3.1: Verificar se o site está online
+        const startTime = Date.now();
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
         const response = await fetch(domain.url, {
           method: "GET",
-          next: { revalidate: 0 }, // Força a não usar cache
-          headers: { "User-Agent": "DomainMonitor/1.0" },
-          signal: AbortSignal.timeout(10000) // 10s timeout
+          redirect: "follow",
+          signal: controller.signal,
         });
-        
+        clearTimeout(timeoutId);
         responseTime = Date.now() - startTime;
-        status = (response.status >= 200 && response.status < 300) ? "online" : "offline";
-      } catch (err) {
+
+        // 3.2: Verificar status HTTP
+        if (!response.ok) {
+          status = "offline";
+        }
+
+        // 3.3: Verificar SSL (extrair data de expiração do certificado)
+        if (domain.url.startsWith("https://")) {
+          try {
+            const urlObj = new URL(domain.url);
+            const hostname = urlObj.hostname;
+
+            // Usar a API do Supabase para verificar SSL
+            const sslController = new AbortController();
+            const sslTimeoutId = setTimeout(() => sslController.abort(), 5000);
+            const sslCheckResponse = await fetch(
+              `https://ssl-api.com/api/v3/certinfo?host=${hostname}`,
+              { signal: sslController.signal }
+            ).catch(() => null).finally(() => clearTimeout(sslTimeoutId));
+
+            if (sslCheckResponse?.ok) {
+              const sslData = await sslCheckResponse.json();
+              if (sslData.certs && sslData.certs[0]) {
+                const certInfo = sslData.certs[0];
+                sslExpiry = new Date(certInfo.not_after * 1000);
+              }
+            }
+          } catch (sslError) {
+            // Se falhar, continua sem SSL info
+            console.log(`SSL check failed for ${domain.url}:`, sslError);
+          }
+        }
+      } catch (error) {
         status = "offline";
+        responseTime = 10000; // Timeout
+        console.log(`Erro ao verificar ${domain.url}:`, error);
       }
 
-      // 4. Registrar Log PRIMEIRO
+      // 4. Salvar o log de verificação
       const { error: logError } = await supabase.from("uptime_logs").insert({
         user_id: domain.user_id,
         domain_id: domain.id,
@@ -54,139 +91,150 @@ export async function GET(request: Request) {
       });
 
       if (logError) {
-        console.error(`Error inserting log for ${domain.url}:`, logError);
+        console.error("Erro ao salvar log:", logError);
+        continue;
       }
 
-      // Aguardar um pouco para garantir que o log foi salvo no banco
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // 4.1: IMPORTANTE - Aguardar um pouco para o banco processar o log
+      await new Promise((resolve) => setTimeout(resolve, 200));
 
-      // 5. CALCULAR UPTIME REAL baseado em TODOS os logs (incluindo o que acabou de ser salvo)
+      // 5. Recalcular uptime DEPOIS de salvar o log
       const { data: allLogs, error: logsError } = await supabase
         .from("uptime_logs")
         .select("status")
         .eq("domain_id", domain.id);
 
-      let uptimePercentage = 100;
-      if (allLogs && allLogs.length > 0) {
-        const onlineCount = allLogs.filter(log => log.status === "online").length;
-        uptimePercentage = parseFloat(((onlineCount / allLogs.length) * 100).toFixed(1));
+      if (logsError) {
+        console.error("Erro ao buscar logs:", logsError);
+        continue;
       }
 
-      // 6. Atualizar o domínio com status, uptime real e tempo de resposta
-      const { error: updateError } = await supabase.from("domains").update({ 
-        status, 
-        uptime: uptimePercentage,
-        response_time: responseTime,
-        last_checked_at: new Date().toISOString() 
-      }).eq("id", domain.id);
+      // 5.1: Calcular uptime baseado em TODOS os logs
+      let uptime = 100;
+      if (allLogs && allLogs.length > 0) {
+        const onlineCount = allLogs.filter((log) => log.status === "online")
+          .length;
+        uptime = Math.round((onlineCount / allLogs.length) * 100);
+      }
+
+      // 6. Atualizar o domínio com o novo uptime
+      const { error: updateError } = await supabase
+        .from("domains")
+        .update({
+          status,
+          uptime,
+          response_time: responseTime,
+          last_checked_at: new Date().toISOString(),
+          ssl_expiry_date: sslExpiry ? sslExpiry.toISOString() : null,
+        })
+        .eq("id", domain.id);
 
       if (updateError) {
-        console.error(`Error updating domain ${domain.url}:`, updateError);
+        console.error("Erro ao atualizar domínio:", updateError);
+        continue;
       }
 
-      // 7. CRIAR ALERTA APENAS SE O STATUS MUDOU
-      let alertMessage = "";
-      let alertType: "down" | "up" | "slow" = "down";
-      let shouldSendWhatsApp = false;
+      // 7. Se o status mudou para OFFLINE, enviar alerta
+      if (status === "offline" && domain.status !== "offline") {
+        // 7.1: Verificar se já existe alerta recente para este domínio
+        const { data: recentAlerts, error: alertCheckError } = await supabase
+          .from("alerts")
+          .select("*")
+          .eq("domain_id", domain.id)
+          .eq("type", "down")
+          .gte("created_at", new Date(Date.now() - 3600000).toISOString()); // Últimas 1 hora
 
-      // Se mudou de ONLINE para OFFLINE
-      if (previousStatus === "online" && status === "offline") {
-        alertMessage = `🚨 Site fora do ar! O domínio ${domain.url} caiu.`;
-        alertType = "down";
-        shouldSendWhatsApp = true; // ✅ ENVIAR WHATSAPP APENAS NESTE CASO
-      }
-      // Se mudou de OFFLINE para ONLINE (recuperado)
-      else if (previousStatus === "offline" && status === "online") {
-        alertMessage = `✅ Site recuperado! O domínio ${domain.url} está online novamente.`;
-        alertType = "up";
-        shouldSendWhatsApp = false; // Não enviar WhatsApp para recuperação
-      }
-      // Se está muito lento (response time > 5s)
-      else if (status === "online" && responseTime > 5000) {
-        alertMessage = `⚠️ Site lento! O domínio ${domain.url} levou ${responseTime}ms para responder.`;
-        alertType = "slow";
-        shouldSendWhatsApp = false; // Não enviar WhatsApp para sites lentos
-      }
+        if (!alertCheckError && recentAlerts && recentAlerts.length === 0) {
+          // 7.2: Salvar alerta no banco
+          const alertMessage = `⚠️ Site ${domain.name} ficou OFFLINE!\nURL: ${domain.url}\nHorário: ${new Date().toLocaleString("pt-BR")}`;
 
-      // 8. SALVAR ALERTA no banco de dados (apenas se houver mudança)
-      if (alertMessage) {
-        const { error: alertError } = await supabase.from("alerts").insert({
-          user_id: domain.user_id,
-          domain_id: domain.id,
-          type: alertType,
-          message: alertMessage,
-          created_at: new Date().toISOString(),
-        });
-
-        if (alertError) {
-          console.error(`Error inserting alert for ${domain.url}:`, alertError);
-        }
-      }
-
-      // 9. ENVIAR WHATSAPP APENAS UMA VEZ (quando status muda de online para offline)
-      if (shouldSendWhatsApp && domain.user_id) {
-        // Buscar credenciais do Twilio
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("whatsapp_number, twilio_sid, twilio_token, twilio_from")
-          .eq("id", domain.user_id)
-          .single();
-
-        if (profile?.twilio_sid && profile?.twilio_token) {
-          const p = profile;
-          try {
-            console.log(`🚀 Sending WhatsApp alert for ${domain.url}`);
-            
-            const auth = Buffer.from(`${p.twilio_sid}:${p.twilio_token}`).toString('base64');
-            const whatsappTo = p.whatsapp_number.startsWith('whatsapp:') 
-              ? p.whatsapp_number 
-              : `whatsapp:${p.whatsapp_number}`;
-            const whatsappFrom = p.twilio_from.startsWith('whatsapp:') 
-              ? p.twilio_from 
-              : `whatsapp:${p.twilio_from}`;
-
-            const twilioResponse = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${p.twilio_sid}/Messages.json`, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Basic ${auth}`,
-                'Content-Type': 'application/x-www-form-urlencoded'
-              },
-              body: new URLSearchParams({
-                To: whatsappTo,
-                From: whatsappFrom,
-                Body: `🚨 *ALERTA TCC* 🚨\n\nO site *${domain.url}* caiu!\nVerificado em: ${new Date().toLocaleString('pt-BR')}\nUptime: ${uptimePercentage}%`
-              }).toString()
+          const { error: alertError } = await supabase
+            .from("alerts")
+            .insert({
+              user_id: domain.user_id,
+              domain_id: domain.id,
+              type: "down",
+              message: alertMessage,
+              created_at: new Date().toISOString(),
             });
 
-            if (!twilioResponse.ok) {
-              const errorText = await twilioResponse.text();
-              console.error(`❌ Twilio error for ${domain.url}:`, twilioResponse.status, errorText);
-            } else {
-              console.log(`✅ WhatsApp alert sent successfully for ${domain.url}`);
-            }
-          } catch (wsError) {
-            console.error("❌ Erro ao enviar Twilio:", wsError);
+          if (alertError) {
+            console.error("Erro ao salvar alerta:", alertError);
+          } else {
+            console.log(`✅ Alerta criado para ${domain.name}`);
           }
-        } else {
-          console.warn(`⚠️ Twilio credentials missing for user ${domain.user_id}`);
+
+          // 7.3: Enviar WhatsApp (se configurado)
+          const { data: profileData, error: profileError } = await supabase
+            .from("profiles")
+            .select("whatsapp_number, twilio_sid, twilio_token, twilio_from")
+            .eq("id", domain.user_id)
+            .single();
+
+          if (!profileError && profileData) {
+            const { whatsapp_number, twilio_sid, twilio_token, twilio_from } =
+              profileData;
+
+            if (whatsapp_number && twilio_sid && twilio_token && twilio_from) {
+              try {
+                const whatsappMessage = `⚠️ *ALERTA: Site Offline*\n\n🔴 ${domain.name} ficou offline!\n\n📍 URL: ${domain.url}\n⏰ ${new Date().toLocaleString("pt-BR")}\n\nVerifique seu dashboard para mais detalhes.`;
+
+                const response = await fetch(
+                  `https://api.twilio.com/2010-04-01/Accounts/${twilio_sid}/Messages.json`,
+                  {
+                    method: "POST",
+                    headers: {
+                      Authorization: `Basic ${Buffer.from(
+                        `${twilio_sid}:${twilio_token}`
+                      ).toString("base64")}`,
+                      "Content-Type": "application/x-www-form-urlencoded",
+                    },
+                    body: new URLSearchParams({
+                      From: twilio_from,
+                      To: whatsapp_number,
+                      Body: whatsappMessage,
+                    }).toString(),
+                  }
+                );
+
+                if (response.ok) {
+                  console.log(
+                    `✅ WhatsApp enviado para ${domain.name}`
+                  );
+                } else {
+                  const errorData = await response.json();
+                  console.error(
+                    `❌ Erro ao enviar WhatsApp: ${JSON.stringify(errorData)}`
+                  );
+                }
+              } catch (twilioError) {
+                console.error("Erro ao enviar WhatsApp:", twilioError);
+              }
+            }
+          }
         }
       }
 
-      results.push({ url: domain.url, status, uptime: uptimePercentage });
+      results.push({
+        domain: domain.name,
+        status,
+        uptime,
+        responseTime,
+        sslExpiry: sslExpiry ? sslExpiry.toISOString() : null,
+      });
     }
 
-    return NextResponse.json({ 
-      message: "Check completed successfully", 
+    return NextResponse.json({
+      success: true,
+      message: "Verificação concluída",
       results,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
-  } catch (error: any) {
-    console.error("Error in check-uptime:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    console.error("Erro geral:", error);
+    return NextResponse.json(
+      { error: "Erro ao verificar domínios", details: String(error) },
+      { status: 500 }
+    );
   }
-}
-
-// Mantemos o POST para compatibilidade com o botão manual do Dashboard
-export async function POST(request: Request) {
-  return GET(request);
 }
