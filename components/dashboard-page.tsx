@@ -61,25 +61,7 @@ export function DashboardPage({ user, profile, initialDomains, initialAlerts }: 
   }
 
   async function checkDomainStatus(domainId: string, url: string) {
-    try {
-      const response = await fetch("/api/check-uptime", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ domainId, url }),
-      })
-      const data = await response.json()
-
-      if (data.status) {
-        setDomains((prev) =>
-          prev.map((d) =>
-            d.id === domainId ? { ...d, status: data.status, uptime: data.uptime, last_checked_at: data.last_check } : d
-
-          )
-        )
-      }
-    } catch (error) {
-      console.error("Error checking domain status:", error)
-    }
+    console.log(`Domínio ${url} será verificado pelo GitHub Actions`)
   }
 
   const filteredDomains = useMemo(() => {
