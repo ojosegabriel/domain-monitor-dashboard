@@ -115,7 +115,7 @@ export async function GET(request: Request) {
       await new Promise((resolve) => setTimeout(resolve, 200));
 
       // 4. Recalcular uptime (últimas 24 horas)
-      console.log(`   📊 [CALCULANDO] Uptime das últimas 24h...`);
+      console.log(`   📊 [CALCULANDO] Uptime...`);
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       
       const { data: allLogs, error: logsError } = await supabase
@@ -130,12 +130,16 @@ export async function GET(request: Request) {
       }
 
       let uptime = 100;
+      
+      // SOLUÇÃO DEFINITIVA: Se não houver logs de 24h, usa o status atual
       if (allLogs && allLogs.length > 0) {
         const onlineCount = allLogs.filter((log) => log.status === "online").length;
         uptime = Math.round((onlineCount / allLogs.length) * 100);
         console.log(`   ✅ Uptime calculado: ${uptime}% (${onlineCount}/${allLogs.length})`);
       } else {
-        console.log(`   ℹ️ Nenhum log nas últimas 24h, mantendo uptime em 100%`);
+        // Se não há logs, o uptime é baseado no status atual
+        uptime = status === "online" ? 100 : 0;
+        console.log(`   ℹ️ Sem logs de 24h. Uptime baseado no status atual: ${uptime}% (${status})`);
       }
 
       // 5. Atualizar o domínio
