@@ -2,37 +2,44 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
-  // 1. Segurança: Verifica se a chamada tem o token correto
-  const authHeader = request.headers.get("authorization");
-  const tokenEsperado = `Bearer ${process.env.CRON_SECRET}`;
-
-  if (false) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+  console.log("🚀 [INICIO] Verificação de domínios iniciada");
+  
   const supabase = await createClient();
 
   try {
-    // 2. Buscar todos os domínios ativos para monitoramento
+    // 1. Buscar todos os domínios
+    console.log("📋 [BUSCA] Buscando domínios no banco...");
     const { data: domains, error: domainsError } = await supabase
       .from("domains")
       .select("*");
 
-    if (domainsError) throw domainsError;
+    if (domainsError) {
+      console.error("❌ [ERRO] Erro ao buscar domínios:", domainsError);
+      throw domainsError;
+    }
+
+    console.log(`✅ [SUCESSO] ${domains?.length || 0} domínios encontrados`);
+
     if (!domains || domains.length === 0) {
-      return NextResponse.json({ message: "Nenhum domínio para verificar" });
+      console.log("⚠️ [AVISO] Nenhum domínio para verificar");
+      return NextResponse.json({ 
+        message: "Nenhum domínio para verificar",
+        timestamp: new Date().toISOString()
+      });
     }
 
     const results = [];
 
-    // 3. Loop para verificar cada domínio
+    // 2. Loop para verificar cada domínio
     for (const domain of domains) {
+      console.log(`\n🔍 [VERIFICANDO] Domínio: ${domain.name} (${domain.url})`);
+      
       let status = "online";
       let responseTime = 0;
       let sslExpiry: Date | null = null;
 
       try {
-        // 3.1: Verificar se o site está online
+        // 2.1: Verificar se o site está online
         const startTime = Date.now();
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -46,23 +53,22 @@ export async function GET(request: Request) {
         clearTimeout(timeoutId);
         responseTime = Date.now() - startTime;
 
-        // 3.2: Verificar status HTTP
+        // 2.2: Verificar status HTTP
         if (!response.ok) {
           status = "offline";
+          console.log(`   ❌ Status HTTP: ${response.status} (offline)`);
+        } else {
+          console.log(`   ✅ Status HTTP: ${response.status} (online)`);
         }
 
-        // 3.3: Verificar SSL (extrair data de expiração do certificado)
+        // 2.3: Verificar SSL
         if (domain.url.startsWith("https://")) {
           try {
             const urlObj = new URL(domain.url);
             const hostname = urlObj.hostname;
 
-            // Usar a API do Supabase para verificar SSL
             const sslController = new AbortController();
-            const sslTimeoutId = setTimeout(
-              () => sslController.abort(),
-              5000
-            );
+            const sslTimeoutId = setTimeout(() => sslController.abort(), 5000);
 
             const sslCheckResponse = await fetch(
               `https://ssl-api.com/api/v3/certinfo?host=${hostname}`,
@@ -76,20 +82,21 @@ export async function GET(request: Request) {
               if (sslData.certs && sslData.certs[0]) {
                 const certInfo = sslData.certs[0];
                 sslExpiry = new Date(certInfo.not_after * 1000);
+                console.log(`   🔐 SSL válido até: ${sslExpiry.toLocaleDateString("pt-BR")}`);
               }
             }
           } catch (sslError) {
-            // Se falhar, continua sem SSL info
-            console.log(`SSL check failed for ${domain.url}:`, sslError);
+            console.log(`   ⚠️ SSL check falhou (continuando sem SSL info)`);
           }
         }
       } catch (error) {
         status = "offline";
-        responseTime = 10000; // Timeout
-        console.log(`Erro ao verificar ${domain.url}:`, error);
+        responseTime = 10000;
+        console.log(`   ❌ Erro ao verificar: ${error instanceof Error ? error.message : String(error)}`);
       }
 
-      // 4. Salvar o log de verificação
+      // 3. Salvar o log de verificação
+      console.log(`   💾 [SALVANDO] Log de verificação...`);
       const { error: logError } = await supabase.from("uptime_logs").insert({
         user_id: domain.user_id,
         domain_id: domain.id,
@@ -99,33 +106,35 @@ export async function GET(request: Request) {
       });
 
       if (logError) {
-        console.error("Erro ao salvar log:", logError);
+        console.error(`   ❌ Erro ao salvar log:`, logError);
         continue;
       }
+      console.log(`   ✅ Log salvo com sucesso`);
 
-      // 4.1: IMPORTANTE - Aguardar um pouco para o banco processar o log
+      // 3.1: Aguardar um pouco para o banco processar
       await new Promise((resolve) => setTimeout(resolve, 200));
 
-      // 5. Recalcular uptime DEPOIS de salvar o log
+      // 4. Recalcular uptime
+      console.log(`   📊 [CALCULANDO] Uptime...`);
       const { data: allLogs, error: logsError } = await supabase
         .from("uptime_logs")
         .select("status")
         .eq("domain_id", domain.id);
 
       if (logsError) {
-        console.error("Erro ao buscar logs:", logsError);
+        console.error(`   ❌ Erro ao buscar logs:`, logsError);
         continue;
       }
 
-      // 5.1: Calcular uptime baseado em TODOS os logs
       let uptime = 100;
       if (allLogs && allLogs.length > 0) {
-        const onlineCount = allLogs.filter((log) => log.status === "online")
-          .length;
+        const onlineCount = allLogs.filter((log) => log.status === "online").length;
         uptime = Math.round((onlineCount / allLogs.length) * 100);
+        console.log(`   ✅ Uptime calculado: ${uptime}% (${onlineCount}/${allLogs.length})`);
       }
 
-      // 6. Atualizar o domínio com o novo uptime
+      // 5. Atualizar o domínio
+      console.log(`   🔄 [ATUALIZANDO] Domínio no banco...`);
       const { error: updateError } = await supabase
         .from("domains")
         .update({
@@ -138,22 +147,27 @@ export async function GET(request: Request) {
         .eq("id", domain.id);
 
       if (updateError) {
-        console.error("Erro ao atualizar domínio:", updateError);
+        console.error(`   ❌ Erro ao atualizar domínio:`, updateError);
         continue;
       }
+      console.log(`   ✅ Domínio atualizado`);
 
-      // 7. Se o status mudou para OFFLINE, enviar alerta
+      // 6. Se o status mudou para OFFLINE, enviar alerta
       if (status === "offline" && domain.status !== "offline") {
-        // 7.1: Verificar se já existe alerta recente para este domínio
+        console.log(`   🚨 [ALERTA] Status mudou para OFFLINE! Verificando alertas recentes...`);
+        
+        // 6.1: Verificar se já existe alerta recente
         const { data: recentAlerts, error: alertCheckError } = await supabase
           .from("alerts")
           .select("*")
           .eq("domain_id", domain.id)
           .eq("type", "down")
-          .gte("created_at", new Date(Date.now() - 3600000).toISOString()); // Últimas 1 hora
+          .gte("created_at", new Date(Date.now() - 3600000).toISOString());
 
         if (!alertCheckError && recentAlerts && recentAlerts.length === 0) {
-          // 7.2: Salvar alerta no banco
+          console.log(`   ✅ Nenhum alerta recente encontrado. Criando novo alerta...`);
+          
+          // 6.2: Salvar alerta
           const alertMessage = `⚠️ Site ${domain.name} ficou OFFLINE!\nURL: ${domain.url}\nHorário: ${new Date().toLocaleString("pt-BR")}`;
 
           const { error: alertError } = await supabase
@@ -167,24 +181,36 @@ export async function GET(request: Request) {
             });
 
           if (alertError) {
-            console.error("Erro ao salvar alerta:", alertError);
+            console.error(`   ❌ Erro ao salvar alerta:`, alertError);
           } else {
-            console.log(`✅ Alerta criado para ${domain.name}`);
+            console.log(`   ✅ Alerta criado com sucesso`);
           }
 
-          // 7.3: Enviar WhatsApp (se configurado)
+          // 6.3: Enviar WhatsApp
+          console.log(`   📱 [WHATSAPP] Buscando credenciais do usuário...`);
           const { data: profileData, error: profileError } = await supabase
             .from("profiles")
             .select("whatsapp_number, twilio_sid, twilio_token, twilio_from")
             .eq("id", domain.user_id)
             .single();
 
-          if (!profileError && profileData) {
-            const { whatsapp_number, twilio_sid, twilio_token, twilio_from } =
-              profileData;
+          if (profileError) {
+            console.error(`   ❌ Erro ao buscar perfil:`, profileError);
+          } else if (!profileData) {
+            console.log(`   ⚠️ Perfil não encontrado`);
+          } else {
+            const { whatsapp_number, twilio_sid, twilio_token, twilio_from } = profileData;
 
-            if (whatsapp_number && twilio_sid && twilio_token && twilio_from) {
+            if (!whatsapp_number || !twilio_sid || !twilio_token || !twilio_from) {
+              console.log(`   ⚠️ Credenciais incompletas do Twilio`);
+              console.log(`      - WhatsApp: ${whatsapp_number ? "✅" : "❌"}`);
+              console.log(`      - SID: ${twilio_sid ? "✅" : "❌"}`);
+              console.log(`      - Token: ${twilio_token ? "✅" : "❌"}`);
+              console.log(`      - From: ${twilio_from ? "✅" : "❌"}`);
+            } else {
               try {
+                console.log(`   📤 [ENVIANDO] Mensagem para ${whatsapp_number}...`);
+                
                 const whatsappMessage = `⚠️ *ALERTA: Site Offline*\n\n🔴 ${domain.name} ficou offline!\n\n📍 URL: ${domain.url}\n⏰ ${new Date().toLocaleString("pt-BR")}\n\nVerifique seu dashboard para mais detalhes.`;
 
                 const response = await fetch(
@@ -206,20 +232,18 @@ export async function GET(request: Request) {
                 );
 
                 if (response.ok) {
-                  console.log(
-                    `✅ WhatsApp enviado para ${domain.name}`
-                  );
+                  console.log(`   ✅ WhatsApp enviado com sucesso!`);
                 } else {
                   const errorData = await response.json();
-                  console.error(
-                    `❌ Erro ao enviar WhatsApp: ${JSON.stringify(errorData)}`
-                  );
+                  console.error(`   ❌ Erro ao enviar WhatsApp:`, errorData);
                 }
               } catch (twilioError) {
-                console.error("Erro ao enviar WhatsApp:", twilioError);
+                console.error(`   ❌ Erro na requisição Twilio:`, twilioError);
               }
             }
           }
+        } else {
+          console.log(`   ⏭️ Alerta recente já existe. Pulando...`);
         }
       }
 
@@ -232,6 +256,9 @@ export async function GET(request: Request) {
       });
     }
 
+    console.log(`\n✅ [CONCLUIDO] Verificação finalizada com sucesso`);
+    console.log(`📊 Resultados: ${results.length} domínios verificados\n`);
+
     return NextResponse.json({
       success: true,
       message: "Verificação concluída",
@@ -239,9 +266,12 @@ export async function GET(request: Request) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Erro geral:", error);
+    console.error("❌ [ERRO GERAL]:", error);
     return NextResponse.json(
-      { error: "Erro ao verificar domínios", details: String(error) },
+      { 
+        error: "Erro ao verificar domínios", 
+        details: error instanceof Error ? error.message : String(error)
+      },
       { status: 500 }
     );
   }
