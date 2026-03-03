@@ -82,40 +82,63 @@ export function DashboardPage({ user, profile, initialDomains, initialAlerts }: 
 
   async function handleAddDomain(name: string, url: string, checkInterval: number) {
     const supabase = createClient()
-    const fullUrl = url.startsWith("http" ) ? url : `https://${url}`
+    const fullUrl = url.startsWith("http") ? url : `https://${url}`
 
-    const { data, error } = await supabase
-      .from("domains")
-      .insert({
-        user_id: user.id,
-        name,
-        url: fullUrl,
-        check_interval: checkInterval,
-        status: "pending",
-        uptime: 0,
-        response_time: 0,
-      })
-      .select()
-      .single()
+    try {
+      const { data, error } = await supabase
+        .from("domains")
+        .insert({
+          user_id: user.id,
+          name,
+          url: fullUrl,
+          check_interval: checkInterval,
+          status: "online",
+          uptime: 0,
+          response_time: 0,
+        })
+        .select()
+        .single()
 
-    if (!error && data) setDomains((prev) => [data, ...prev])
-    checkDomainStatus(data.id, data.url)
+      if (error) {
+        console.error("Erro completo:", JSON.stringify(error, null, 2))
+        console.error("Mensagem:", error?.message)
+        console.error("Detalhes:", error?.details)
+        console.error("Hint:", error?.hint)
+        return
+      }
+
+      if (data) {
+        setDomains((prev) => [data, ...prev])
+        checkDomainStatus(data.id, data.url)
+      }
+    } catch (err) {
+      console.error("Erro inesperado ao adicionar domínio:", err)
+    }
   }
 
   async function handleEditDomain(id: string, name: string, url: string, checkInterval: number) {
     const supabase = createClient()
     const fullUrl = url.startsWith("http") ? url : `https://${url}`
 
-    const { data, error } = await supabase
-      .from("domains")
-      .update({ name, url: fullUrl, check_interval: checkInterval })
-      .eq("id", id)
-      .select()
-      .single()
-    
-    if (!error && data) {
-      setDomains((prev) => prev.map((d) => (d.id === id ? data : d)))
-      checkDomainStatus(data.id, data.url)
+    try {
+      const { data, error } = await supabase
+        .from("domains")
+        .update({ name, url: fullUrl, check_interval: checkInterval })
+        .eq("id", id)
+        .select()
+        .single()
+      
+      if (error) {
+        console.error("Erro ao editar domínio:", error)
+        return
+      }
+
+      if (data) {
+        setDomains((prev) => prev.map((d) => (d.id === id ? data : d)))
+        checkDomainStatus(data.id, data.url)
+      }
+    } catch (err) {
+      console.error("Erro inesperado ao editar domínio:", err)
     }
   }
 
@@ -325,7 +348,7 @@ export function DashboardPage({ user, profile, initialDomains, initialAlerts }: 
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">{renderContent()}</main>
       </div>
 
-           <AddDomainModal open={addModalOpen} onOpenChange={setAddModalOpen} onAdd={handleAddDomain} />
+      <AddDomainModal open={addModalOpen} onOpenChange={setAddModalOpen} onAdd={handleAddDomain} />
       <EditDomainModal
         open={editModalOpen}
         onOpenChange={setEditModalOpen}
