@@ -1,10 +1,25 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient as createAnonClient } from "@supabase/supabase-js";
 
 export async function GET(request: Request) {
   console.log("🚀 [INICIO] Verificação de domínios iniciada");
   
-  const supabase = await createClient();
+  // Usar SERVICE_ROLE_KEY para bypass de RLS
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    console.error("❌ [ERRO] Variáveis de ambiente não configuradas");
+    return NextResponse.json(
+      { 
+        error: "Variáveis de ambiente não configuradas",
+        details: `URL: ${supabaseUrl ? "✅" : "❌"}, Key: ${serviceRoleKey ? "✅" : "❌"}`
+      },
+      { status: 500 }
+    );
+  }
+
+  const supabase = createAnonClient(supabaseUrl, serviceRoleKey);
 
   try {
     // 1. Buscar todos os domínios
@@ -48,6 +63,9 @@ export async function GET(request: Request) {
           method: "GET",
           signal: controller.signal,
           redirect: "follow",
+          headers: {
+            "User-Agent": "Domain-Monitor-Dashboard/1.0"
+          }
         });
 
         clearTimeout(timeoutId);
@@ -58,11 +76,11 @@ export async function GET(request: Request) {
           status = "offline";
           console.log(`   ❌ Status HTTP: ${response.status} (offline)`);
         } else {
-          console.log(`   ✅ Status HTTP: ${response.status} (online)`);
+          console.log(`   ✅ Status HTTP: ${response.status} (online) - ${responseTime}ms`);
         }
 
         // 2.3: Verificar SSL
-        if (domain.url.startsWith("https://" )) {
+        if (domain.url.startsWith("https://")) {
           try {
             const urlObj = new URL(domain.url);
             const hostname = urlObj.hostname;
@@ -73,7 +91,7 @@ export async function GET(request: Request) {
             const sslCheckResponse = await fetch(
               `https://ssl-api.com/api/v3/certinfo?host=${hostname}`,
               { signal: sslController.signal }
-             );
+            );
 
             clearTimeout(sslTimeoutId);
 
@@ -131,7 +149,7 @@ export async function GET(request: Request) {
 
       let uptime = 100;
       
-      // SOLUÇÃO DEFINITIVA: Se não houver logs de 24h, usa o status atual
+      // SOLUÇÃO: Se não houver logs de 24h, usa o status atual
       if (allLogs && allLogs.length > 0) {
         const onlineCount = allLogs.filter((log) => log.status === "online").length;
         uptime = Math.round((onlineCount / allLogs.length) * 100);
@@ -216,7 +234,7 @@ export async function GET(request: Request) {
                       headers: {
                         Authorization: `Basic ${Buffer.from(
                           `${twilio_sid}:${twilio_token}`
-                         ).toString("base64")}`,
+                        ).toString("base64")}`,
                         "Content-Type": "application/x-www-form-urlencoded",
                       },
                       body: new URLSearchParams({

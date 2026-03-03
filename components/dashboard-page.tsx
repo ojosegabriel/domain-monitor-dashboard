@@ -91,8 +91,8 @@ export function DashboardPage({ user, profile, initialDomains, initialAlerts }: 
         name,
         url: fullUrl,
         check_interval: checkInterval,
-        status: "offline",
-        uptime: 100,
+        status: "pending",
+        uptime: 0,
         response_time: 0,
       })
       .select()
