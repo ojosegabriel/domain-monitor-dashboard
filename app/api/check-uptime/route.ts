@@ -7,7 +7,7 @@ export async function GET(request: Request) {
   const supabase = await createClient();
 
   try {
-    // 1. Buscar todos os domínios (SEM FILTRO - Supabase RLS vai filtrar automaticamente)
+    // 1. Buscar todos os domínios
     console.log("📋 [BUSCA] Buscando domínios no banco...");
     const { data: domains, error: domainsError } = await supabase
       .from("domains")
@@ -134,6 +134,8 @@ export async function GET(request: Request) {
         const onlineCount = allLogs.filter((log) => log.status === "online").length;
         uptime = Math.round((onlineCount / allLogs.length) * 100);
         console.log(`   ✅ Uptime calculado: ${uptime}% (${onlineCount}/${allLogs.length})`);
+      } else {
+        console.log(`   ℹ️ Nenhum log nas últimas 24h, mantendo uptime em 100%`);
       }
 
       // 5. Atualizar o domínio
@@ -155,14 +157,14 @@ export async function GET(request: Request) {
       }
       console.log(`   ✅ Domínio atualizado`);
 
-      // 6. Se o status mudou para OFFLINE, enviar alerta
+      // 6. Se o status é OFFLINE, verificar se precisa enviar alerta
       if (status === "offline") {
         console.log(`   🚨 [ALERTA] Domínio está offline! Verificando se precisa enviar notificação...`);
         
-        // 6.1: Buscar o status anterior
+        // 6.1: Buscar o status anterior (últimas 2 verificações)
         const { data: previousLogs, error: prevError } = await supabase
           .from("uptime_logs")
-          .select("status")
+          .select("status, checked_at")
           .eq("domain_id", domain.id)
           .order("checked_at", { ascending: false })
           .limit(2);
@@ -170,10 +172,10 @@ export async function GET(request: Request) {
         if (prevError) {
           console.error(`   ❌ Erro ao buscar logs anteriores:`, prevError);
         } else {
-          // Verificar se o status mudou de online para offline
-          const wasOnlineBefore = previousLogs && previousLogs.length > 1 && previousLogs[1].status === "online";
+          // Verificar se houve mudança de status (online -> offline)
+          const hasStatusChange = previousLogs && previousLogs.length > 1 && previousLogs[1].status === "online";
           
-          if (wasOnlineBefore) {
+          if (hasStatusChange) {
             console.log(`   ⚠️ Status mudou de ONLINE para OFFLINE! Enviando alerta...`);
             
             // 6.2: Buscar perfil do usuário para pegar o número do WhatsApp
@@ -248,7 +250,7 @@ export async function GET(request: Request) {
               }
             }
           } else {
-            console.log(`   ⏭️ Domínio já estava offline. Pulando alerta...`);
+            console.log(`   ⏭️ Domínio já estava offline ou é primeira verificação. Pulando alerta...`);
           }
         }
       }
