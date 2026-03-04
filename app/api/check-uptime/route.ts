@@ -1,13 +1,23 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@supabase/supabase-js";
 
 export async function GET(request: Request) {
   console.log("🚀 [INICIO] Verificação de domínios iniciada");
   
-  const supabase = await createClient();
+  // Verificar autenticação
+  const secret = request.headers.get("x-cron-secret");
+  if (secret !== process.env.CRON_SECRET) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // ✅ USAR SERVICE_ROLE_KEY AQUI!
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
 
   try {
-    // 1. Buscar todos os domínios (SEM FILTRO - Supabase RLS vai filtrar automaticamente)
+    // 1. Buscar todos os domínios
     console.log("📋 [BUSCA] Buscando domínios no banco...");
     const { data: domains, error: domainsError } = await supabase
       .from("domains")
@@ -134,6 +144,10 @@ export async function GET(request: Request) {
         const onlineCount = allLogs.filter((log) => log.status === "online").length;
         uptime = Math.round((onlineCount / allLogs.length) * 100);
         console.log(`   ✅ Uptime calculado: ${uptime}% (${onlineCount}/${allLogs.length})`);
+      } else {
+        // Se não houver logs de 24h, usa o status atual
+        uptime = status === "online" ? 100 : 0;
+        console.log(`   ℹ️ Sem logs de 24h, usando status atual: ${uptime}%`);
       }
 
       // 5. Atualizar o domínio
@@ -153,108 +167,93 @@ export async function GET(request: Request) {
         console.error(`   ❌ Erro ao atualizar domínio:`, updateError);
         continue;
       }
-      console.log(`   ✅ Domínio atualizado`);
+      console.log(`   ✅ Domínio atualizado com sucesso`);
 
-      // 6. Se o status mudou para OFFLINE, enviar alerta
-      if (status === "offline") {
-        console.log(`   🚨 [ALERTA] Domínio está offline! Verificando se precisa enviar notificação...`);
-        
-        // 6.1: Buscar o status anterior
-        const { data: previousLogs, error: prevError } = await supabase
-          .from("uptime_logs")
-          .select("status")
-          .eq("domain_id", domain.id)
-          .order("checked_at", { ascending: false })
-          .limit(2);
+      // 6. Verificar se precisa enviar alerta WhatsApp
+      console.log(`   📱 [WHATSAPP] Verificando se precisa enviar alerta...`);
 
-        if (prevError) {
-          console.error(`   ❌ Erro ao buscar logs anteriores:`, prevError);
-        } else {
-          // Verificar se o status mudou de online para offline
-          const wasOnlineBefore = previousLogs && previousLogs.length > 1 && previousLogs[1].status === "online";
-          
-          if (wasOnlineBefore) {
-            console.log(`   ⚠️ Status mudou de ONLINE para OFFLINE! Enviando alerta...`);
-            
-            // 6.2: Buscar perfil do usuário para pegar o número do WhatsApp
-            const { data: profile, error: profileError } = await supabase
-              .from("profiles")
-              .select("whatsapp_number")
-              .eq("id", domain.user_id)
-              .single();
+      // 6.1: Buscar o perfil do usuário
+      const { data: userProfile, error: profileError } = await supabase
+        .from("profiles")
+        .select("whatsapp_number")
+        .eq("id", domain.user_id)
+        .single();
 
-            if (profileError) {
-              console.error(`   ❌ Erro ao buscar perfil:`, profileError);
-            } else {
-              const whatsapp_number = profile?.whatsapp_number;
-              const twilio_sid = process.env.TWILIO_ACCOUNT_SID;
-              const twilio_token = process.env.TWILIO_AUTH_TOKEN;
-              const twilio_from = process.env.TWILIO_WHATSAPP_FROM;
+      if (profileError || !userProfile?.whatsapp_number) {
+        console.log(`   ⚠️ Usuário não tem WhatsApp configurado, pulando alerta`);
+        continue;
+      }
 
-              if (!whatsapp_number || !twilio_sid || !twilio_token || !twilio_from) {
-                console.log(`   ⚠️ Credenciais incompletas do Twilio`);
-                console.log(`      - WhatsApp: ${whatsapp_number ? "✅" : "❌"}`);
-                console.log(`      - SID: ${twilio_sid ? "✅" : "❌"}`);
-                console.log(`      - Token: ${twilio_token ? "✅" : "❌"}`);
-                console.log(`      - From: ${twilio_from ? "✅" : "❌"}`);
-              } else {
-                try {
-                  console.log(`   📤 [ENVIANDO] Mensagem para ${whatsapp_number}...`);
-                  
-                  const whatsappMessage = `⚠️ *ALERTA: Site Offline*\n\n🔴 ${domain.name} ficou offline!\n\n📍 URL: ${domain.url}\n⏰ ${new Date().toLocaleString("pt-BR")}\n\nVerifique seu dashboard para mais detalhes.`;
+      // 6.2: Verificar se o status mudou
+      const { data: previousLogs } = await supabase
+        .from("uptime_logs")
+        .select("status")
+        .eq("domain_id", domain.id)
+        .order("checked_at", { ascending: false })
+        .limit(2);
 
-                  const response = await fetch(
-                    `https://api.twilio.com/2010-04-01/Accounts/${twilio_sid}/Messages.json`,
-                    {
-                      method: "POST",
-                      headers: {
-                        Authorization: `Basic ${Buffer.from(
-                          `${twilio_sid}:${twilio_token}`
-                        ).toString("base64")}`,
-                        "Content-Type": "application/x-www-form-urlencoded",
-                      },
-                      body: new URLSearchParams({
-                        From: twilio_from,
-                        To: whatsapp_number,
-                        Body: whatsappMessage,
-                      }).toString(),
-                    }
-                  );
+      const wasOnlineBefore = previousLogs && previousLogs.length > 1 && previousLogs[1].status === "online";
+      const isNowOffline = status === "offline";
+      const wasOfflineBefore = previousLogs && previousLogs.length > 1 && previousLogs[1].status === "offline";
+      const isNowOnline = status === "online";
 
-                  if (response.ok) {
-                    console.log(`   ✅ WhatsApp enviado com sucesso!`);
-                    
-                    // 6.3: Salvar o alerta no banco
-                    const { error: alertError } = await supabase.from("alerts").insert({
-                      user_id: domain.user_id,
-                      domain_id: domain.id,
-                      alert_type: "offline",
-                      message: `${domain.name} ficou offline`,
-                      sent_at: new Date().toISOString(),
-                    });
+      // Se não houve mudança, não envia
+      if ((isNowOffline && wasOnlineBefore) || (isNowOnline && wasOfflineBefore)) {
+        console.log(`   ✅ Status mudou, enviando alerta...`);
 
-                    if (alertError) {
-                      console.error(`   ❌ Erro ao salvar alerta:`, alertError);
-                    } else {
-                      console.log(`   ✅ Alerta salvo no banco`);
-                    }
-                  } else {
-                    const errorData = await response.json();
-                    console.error(`   ❌ Erro ao enviar WhatsApp:`, errorData);
-                  }
-                } catch (twilioError) {
-                  console.error(`   ❌ Erro na requisição Twilio:`, twilioError);
-                }
-              }
-            }
-          } else {
-            console.log(`   ⏭️ Domínio já estava offline. Pulando alerta...`);
-          }
+        const whatsappMessage = isNowOffline
+          ? `🚨 ALERTA: Seu domínio "${domain.name}" ficou OFFLINE!\n\nURL: ${domain.url}\nHorário: ${new Date().toLocaleString("pt-BR")}`
+          : `✅ ALERTA RESOLVIDO: Seu domínio "${domain.name}" voltou ONLINE!\n\nURL: ${domain.url}\nHorário: ${new Date().toLocaleString("pt-BR")}`;
+
+        const twilio_sid = process.env.TWILIO_ACCOUNT_SID;
+        const twilio_token = process.env.TWILIO_AUTH_TOKEN;
+        const twilio_from = process.env.TWILIO_WHATSAPP_FROM;
+        const whatsapp_number = userProfile.whatsapp_number;
+
+        if (!twilio_sid || !twilio_token || !twilio_from) {
+          console.log(`   ⚠️ Credenciais incompletas do Twilio`);
+          continue;
         }
+
+        try {
+          const response = await fetch("https://api.twilio.com/2010-04-01/Accounts/" + twilio_sid + "/Messages.json", {
+            method: "POST",
+            headers: {
+              Authorization: `Basic ${Buffer.from(`${twilio_sid}:${twilio_token}`).toString("base64")}`,
+              "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams([
+              ["From", twilio_from],
+              ["To", whatsapp_number],
+              ["Body", whatsappMessage],
+            ]).toString(),
+          });
+
+          if (response.ok) {
+            console.log(`   ✅ WhatsApp enviado com sucesso!`);
+            
+            // Salvar o alerta no banco
+            await supabase.from("alerts").insert({
+              user_id: domain.user_id,
+              domain_id: domain.id,
+              alert_type: isNowOffline ? "offline" : "online",
+              message: whatsappMessage,
+              sent_at: new Date().toISOString(),
+            });
+          } else {
+            const errorData = await response.json();
+            console.error(`   ❌ Erro ao enviar WhatsApp:`, errorData);
+          }
+        } catch (whatsappError) {
+          console.error(`   ❌ Erro ao enviar WhatsApp:`, whatsappError);
+        }
+      } else {
+        console.log(`   ⏭️ Domínio já estava ${status}, pulando alerta`);
       }
 
       results.push({
         domain: domain.name,
+        url: domain.url,
         status,
         uptime,
         responseTime,
