@@ -172,21 +172,15 @@ export async function GET(request: Request) {
       // 6. Verificar se precisa enviar alerta WhatsApp
       console.log(`   📱 [WHATSAPP] Verificando se precisa enviar alerta...`);
 
-      // 6.1: Buscar o perfil do usuário (INCLUINDO CREDENCIAIS DO TWILIO!)
+      // 6.1: Buscar o perfil do usuário (COM TODAS AS CREDENCIAIS!)
       const { data: userProfile, error: profileError } = await supabase
         .from("profiles")
-        .select("whatsapp_number, twilio_sid, twilio_token, twilio_from")
+        .select("whatsapp_number, twilio_sid, twilio_token, twilio_from, whatsapp_apikey")
         .eq("id", domain.user_id)
         .single();
 
       if (profileError || !userProfile?.whatsapp_number) {
         console.log(`   ⚠️ Usuário não tem WhatsApp configurado, pulando alerta`);
-        continue;
-      }
-
-      // Verificar se tem credenciais do Twilio
-      if (!userProfile.twilio_sid || !userProfile.twilio_token || !userProfile.twilio_from) {
-        console.log(`   ⚠️ Usuário não tem credenciais do Twilio configuradas, pulando alerta`);
         continue;
       }
 
@@ -211,28 +205,64 @@ export async function GET(request: Request) {
         console.log(`   ✅ Status mudou de ${previousStatus} para ${status}, enviando alerta...`);
 
         const isNowOffline = status === "offline";
+        
+        // Converter para GMT-3 (Brasil) - America/Sao_Paulo
+        const horarioBrasil = new Date().toLocaleString("pt-BR", { 
+          timeZone: "America/Sao_Paulo",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit"
+        });
+        
         const whatsappMessage = isNowOffline
-          ? `🚨 ALERTA: Seu domínio "${domain.name}" ficou OFFLINE!\n\nURL: ${domain.url}\nHorário: ${new Date().toLocaleString("pt-BR")}`
-          : `✅ ALERTA RESOLVIDO: Seu domínio "${domain.name}" voltou ONLINE!\n\nURL: ${domain.url}\nHorário: ${new Date().toLocaleString("pt-BR")}`;
+          ? `🚨 ALERTA: Seu domínio "${domain.name}" ficou OFFLINE!\n\nURL: ${domain.url}\nHorário: ${horarioBrasil}`
+          : `✅ ALERTA RESOLVIDO: Seu domínio "${domain.name}" voltou ONLINE!\n\nURL: ${domain.url}\nHorário: ${horarioBrasil}`;
 
-        // ✅ USAR CREDENCIAIS DO BANCO, NÃO DA VERCEL!
-        const twilio_sid = userProfile.twilio_sid;
-        const twilio_token = userProfile.twilio_token;
-        const twilio_from = userProfile.twilio_from;
+        // ✅ FALLBACK PARA TODAS AS CREDENCIAIS!
+        let twilio_sid = userProfile.twilio_sid || process.env.TWILIO_ACCOUNT_SID;
+        let twilio_token = userProfile.twilio_token || process.env.TWILIO_AUTH_TOKEN;
+        let twilio_from = userProfile.twilio_from || process.env.TWILIO_WHATSAPP_FROM;
         const whatsapp_number = userProfile.whatsapp_number;
 
+        // Log de onde as credenciais vieram
+        if (userProfile.twilio_sid) console.log(`   ℹ️ Usando TWILIO_ACCOUNT_SID do banco`);
+        else console.log(`   ℹ️ Usando TWILIO_ACCOUNT_SID da Vercel`);
+        
+        if (userProfile.twilio_token) console.log(`   ℹ️ Usando TWILIO_AUTH_TOKEN do banco`);
+        else console.log(`   ℹ️ Usando TWILIO_AUTH_TOKEN da Vercel`);
+        
+        if (userProfile.twilio_from) console.log(`   ℹ️ Usando TWILIO_WHATSAPP_FROM do banco`);
+        else console.log(`   ℹ️ Usando TWILIO_WHATSAPP_FROM da Vercel`);
+
+        // Verificar se tem credenciais
+        if (!twilio_sid || !twilio_token || !twilio_from) {
+          console.log(`   ⚠️ Credenciais incompletas do Twilio (banco e Vercel)`);
+          continue;
+        }
+
         try {
+          // Garantir que From e To têm o prefixo whatsapp:
+          const fromNumber = twilio_from.startsWith("whatsapp:") ? twilio_from : `whatsapp:${twilio_from}`;
+          const toNumber = whatsapp_number.startsWith("whatsapp:") ? whatsapp_number : `whatsapp:${whatsapp_number}`;
+          
+          console.log(`   📤 Enviando WhatsApp: From=${fromNumber}, To=${toNumber}`);
+          
+          // Construir o body como string (não usar URLSearchParams que faz encoding)
+          const bodyParams = new URLSearchParams();
+          bodyParams.append("From", fromNumber);
+          bodyParams.append("To", toNumber);
+          bodyParams.append("Body", whatsappMessage);
+          
           const response = await fetch("https://api.twilio.com/2010-04-01/Accounts/" + twilio_sid + "/Messages.json", {
             method: "POST",
             headers: {
               Authorization: `Basic ${Buffer.from(`${twilio_sid}:${twilio_token}`).toString("base64")}`,
               "Content-Type": "application/x-www-form-urlencoded",
             },
-            body: new URLSearchParams([
-              ["From", twilio_from],
-              ["To", `whatsapp:${whatsapp_number}`],
-              ["Body", whatsappMessage],
-            ]).toString(),
+            body: bodyParams.toString(),
           });
 
           if (response.ok) {
