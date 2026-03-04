@@ -172,15 +172,21 @@ export async function GET(request: Request) {
       // 6. Verificar se precisa enviar alerta WhatsApp
       console.log(`   📱 [WHATSAPP] Verificando se precisa enviar alerta...`);
 
-      // 6.1: Buscar o perfil do usuário
+      // 6.1: Buscar o perfil do usuário (INCLUINDO CREDENCIAIS DO TWILIO!)
       const { data: userProfile, error: profileError } = await supabase
         .from("profiles")
-        .select("whatsapp_number")
+        .select("whatsapp_number, twilio_sid, twilio_token, twilio_from")
         .eq("id", domain.user_id)
         .single();
 
       if (profileError || !userProfile?.whatsapp_number) {
         console.log(`   ⚠️ Usuário não tem WhatsApp configurado, pulando alerta`);
+        continue;
+      }
+
+      // Verificar se tem credenciais do Twilio
+      if (!userProfile.twilio_sid || !userProfile.twilio_token || !userProfile.twilio_from) {
+        console.log(`   ⚠️ Usuário não tem credenciais do Twilio configuradas, pulando alerta`);
         continue;
       }
 
@@ -192,28 +198,28 @@ export async function GET(request: Request) {
         .order("checked_at", { ascending: false })
         .limit(2);
 
-      const wasOnlineBefore = previousLogs && previousLogs.length > 1 && previousLogs[1].status === "online";
-      const isNowOffline = status === "offline";
-      const wasOfflineBefore = previousLogs && previousLogs.length > 1 && previousLogs[1].status === "offline";
-      const isNowOnline = status === "online";
+      // Se não há histórico anterior, não envia alerta
+      if (!previousLogs || previousLogs.length < 2) {
+        console.log(`   ⏭️ Sem histórico anterior, pulando alerta`);
+        continue;
+      }
 
-      // Se não houve mudança, não envia
-      if ((isNowOffline && wasOnlineBefore) || (isNowOnline && wasOfflineBefore)) {
-        console.log(`   ✅ Status mudou, enviando alerta...`);
+      const previousStatus = previousLogs[1].status;
+      const statusChanged = previousStatus !== status;
 
+      if (statusChanged) {
+        console.log(`   ✅ Status mudou de ${previousStatus} para ${status}, enviando alerta...`);
+
+        const isNowOffline = status === "offline";
         const whatsappMessage = isNowOffline
           ? `🚨 ALERTA: Seu domínio "${domain.name}" ficou OFFLINE!\n\nURL: ${domain.url}\nHorário: ${new Date().toLocaleString("pt-BR")}`
           : `✅ ALERTA RESOLVIDO: Seu domínio "${domain.name}" voltou ONLINE!\n\nURL: ${domain.url}\nHorário: ${new Date().toLocaleString("pt-BR")}`;
 
-        const twilio_sid = process.env.TWILIO_ACCOUNT_SID;
-        const twilio_token = process.env.TWILIO_AUTH_TOKEN;
-        const twilio_from = process.env.TWILIO_WHATSAPP_FROM;
+        // ✅ USAR CREDENCIAIS DO BANCO, NÃO DA VERCEL!
+        const twilio_sid = userProfile.twilio_sid;
+        const twilio_token = userProfile.twilio_token;
+        const twilio_from = userProfile.twilio_from;
         const whatsapp_number = userProfile.whatsapp_number;
-
-        if (!twilio_sid || !twilio_token || !twilio_from) {
-          console.log(`   ⚠️ Credenciais incompletas do Twilio`);
-          continue;
-        }
 
         try {
           const response = await fetch("https://api.twilio.com/2010-04-01/Accounts/" + twilio_sid + "/Messages.json", {
@@ -248,7 +254,7 @@ export async function GET(request: Request) {
           console.error(`   ❌ Erro ao enviar WhatsApp:`, whatsappError);
         }
       } else {
-        console.log(`   ⏭️ Domínio já estava ${status}, pulando alerta`);
+        console.log(`   ⏭️ Status não mudou (${status}), pulando alerta`);
       }
 
       results.push({
