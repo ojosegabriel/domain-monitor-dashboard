@@ -224,7 +224,7 @@ export async function GET(request: Request) {
             },
             body: new URLSearchParams([
               ["From", twilio_from],
-              ["To", whatsapp_number],
+              ["To", `whatsapp:${whatsapp_number}`],
               ["Body", whatsappMessage],
             ]).toString(),
           });
