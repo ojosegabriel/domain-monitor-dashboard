@@ -1,28 +1,13 @@
 import { NextResponse } from "next/server";
-import { createClient as createAnonClient } from "@supabase/supabase-js";
+import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
   console.log("🚀 [INICIO] Verificação de domínios iniciada");
   
-  // Usar SERVICE_ROLE_KEY para bypass de RLS
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    console.error("❌ [ERRO] Variáveis de ambiente não configuradas");
-    return NextResponse.json(
-      { 
-        error: "Variáveis de ambiente não configuradas",
-        details: `URL: ${supabaseUrl ? "✅" : "❌"}, Key: ${serviceRoleKey ? "✅" : "❌"}`
-      },
-      { status: 500 }
-    );
-  }
-
-  const supabase = createAnonClient(supabaseUrl, serviceRoleKey);
+  const supabase = await createClient();
 
   try {
-    // 1. Buscar todos os domínios
+    // 1. Buscar todos os domínios (SEM FILTRO - Supabase RLS vai filtrar automaticamente)
     console.log("📋 [BUSCA] Buscando domínios no banco...");
     const { data: domains, error: domainsError } = await supabase
       .from("domains")
@@ -63,9 +48,6 @@ export async function GET(request: Request) {
           method: "GET",
           signal: controller.signal,
           redirect: "follow",
-          headers: {
-            "User-Agent": "Domain-Monitor-Dashboard/1.0"
-          }
         });
 
         clearTimeout(timeoutId);
@@ -76,7 +58,7 @@ export async function GET(request: Request) {
           status = "offline";
           console.log(`   ❌ Status HTTP: ${response.status} (offline)`);
         } else {
-          console.log(`   ✅ Status HTTP: ${response.status} (online) - ${responseTime}ms`);
+          console.log(`   ✅ Status HTTP: ${response.status} (online)`);
         }
 
         // 2.3: Verificar SSL
@@ -133,7 +115,7 @@ export async function GET(request: Request) {
       await new Promise((resolve) => setTimeout(resolve, 200));
 
       // 4. Recalcular uptime (últimas 24 horas)
-      console.log(`   📊 [CALCULANDO] Uptime...`);
+      console.log(`   📊 [CALCULANDO] Uptime das últimas 24h...`);
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       
       const { data: allLogs, error: logsError } = await supabase
@@ -148,16 +130,10 @@ export async function GET(request: Request) {
       }
 
       let uptime = 100;
-      
-      // SOLUÇÃO: Se não houver logs de 24h, usa o status atual
       if (allLogs && allLogs.length > 0) {
         const onlineCount = allLogs.filter((log) => log.status === "online").length;
         uptime = Math.round((onlineCount / allLogs.length) * 100);
         console.log(`   ✅ Uptime calculado: ${uptime}% (${onlineCount}/${allLogs.length})`);
-      } else {
-        // Se não há logs, o uptime é baseado no status atual
-        uptime = status === "online" ? 100 : 0;
-        console.log(`   ℹ️ Sem logs de 24h. Uptime baseado no status atual: ${uptime}% (${status})`);
       }
 
       // 5. Atualizar o domínio
@@ -179,14 +155,14 @@ export async function GET(request: Request) {
       }
       console.log(`   ✅ Domínio atualizado`);
 
-      // 6. Se o status é OFFLINE, verificar se precisa enviar alerta
+      // 6. Se o status mudou para OFFLINE, enviar alerta
       if (status === "offline") {
         console.log(`   🚨 [ALERTA] Domínio está offline! Verificando se precisa enviar notificação...`);
         
-        // 6.1: Buscar o status anterior (últimas 2 verificações)
+        // 6.1: Buscar o status anterior
         const { data: previousLogs, error: prevError } = await supabase
           .from("uptime_logs")
-          .select("status, checked_at")
+          .select("status")
           .eq("domain_id", domain.id)
           .order("checked_at", { ascending: false })
           .limit(2);
@@ -194,10 +170,10 @@ export async function GET(request: Request) {
         if (prevError) {
           console.error(`   ❌ Erro ao buscar logs anteriores:`, prevError);
         } else {
-          // Verificar se houve mudança de status (online -> offline)
-          const hasStatusChange = previousLogs && previousLogs.length > 1 && previousLogs[1].status === "online";
+          // Verificar se o status mudou de online para offline
+          const wasOnlineBefore = previousLogs && previousLogs.length > 1 && previousLogs[1].status === "online";
           
-          if (hasStatusChange) {
+          if (wasOnlineBefore) {
             console.log(`   ⚠️ Status mudou de ONLINE para OFFLINE! Enviando alerta...`);
             
             // 6.2: Buscar perfil do usuário para pegar o número do WhatsApp
@@ -272,7 +248,7 @@ export async function GET(request: Request) {
               }
             }
           } else {
-            console.log(`   ⏭️ Domínio já estava offline ou é primeira verificação. Pulando alerta...`);
+            console.log(`   ⏭️ Domínio já estava offline. Pulando alerta...`);
           }
         }
       }
