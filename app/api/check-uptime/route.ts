@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+// ===== CONFIGURAÇÃO =====
+// Número de checks consecutivos necessários para confirmar uma mudança de estado
+// Exemplo: CONFIRMATION_THRESHOLD = 3 significa que precisa de 3 checks offline para notificar a queda
+const CONFIRMATION_THRESHOLD = 3;
+
 export async function GET(request: Request) {
   console.log("🚀 [INICIO] Verificação de domínios iniciada");
   
@@ -150,12 +155,60 @@ export async function GET(request: Request) {
         console.log(`   ℹ️ Sem logs de 24h, usando status atual: ${uptime}%`);
       }
 
-      // 5. Atualizar o domínio
+      // ===== NOVO: SISTEMA DE CONFIRMAÇÃO DE ESTADO =====
+      console.log(`   🔄 [CONFIRMAÇÃO] Verificando confirmação de estado...`);
+      
+      // 5.1: Buscar os últimos N checks para este domínio
+      const { data: recentLogs, error: recentLogsError } = await supabase
+        .from("uptime_logs")
+        .select("status")
+        .eq("domain_id", domain.id)
+        .order("checked_at", { ascending: false })
+        .limit(CONFIRMATION_THRESHOLD);
+
+      if (recentLogsError) {
+        console.error(`   ❌ Erro ao buscar logs recentes:`, recentLogsError);
+        continue;
+      }
+
+      // 5.2: Verificar se todos os últimos N checks têm o mesmo status
+      let confirmedStatus = domain.confirmed_status || "online";
+      let shouldNotify = false;
+      let notificationReason = "";
+
+      if (recentLogs && recentLogs.length === CONFIRMATION_THRESHOLD) {
+        // Verificar se todos os checks têm o mesmo status
+        const allSameStatus = recentLogs.every((log) => log.status === status);
+        
+        if (allSameStatus && status !== confirmedStatus) {
+          // Status mudou e foi confirmado por N checks consecutivos
+          shouldNotify = true;
+          confirmedStatus = status;
+          notificationReason = `Status confirmado após ${CONFIRMATION_THRESHOLD} checks consecutivos: ${status}`;
+          console.log(`   ✅ ${notificationReason}`);
+        } else if (!allSameStatus) {
+          // Ainda há oscilação - não notifica
+          console.log(`   ⏭️ Oscilação detectada (flapping) - aguardando confirmação`);
+          console.log(`      Últimos checks: ${recentLogs.map((l) => l.status).reverse().join(" -> ")}`);
+        } else {
+          // Status é o mesmo que o confirmado - sem mudança
+          console.log(`   ℹ️ Status mantém-se ${status} (sem mudança)`);
+        }
+      } else if (recentLogs && recentLogs.length > 0) {
+        // Menos de N checks disponíveis - ainda em fase de coleta
+        console.log(`   ⏳ Coletando dados para confirmação (${recentLogs.length}/${CONFIRMATION_THRESHOLD})`);
+      } else {
+        // Primeiro check - não notifica
+        console.log(`   ℹ️ Primeiro check - sem histórico para comparação`);
+      }
+
+      // 5. Atualizar o domínio com status confirmado
       console.log(`   🔄 [ATUALIZANDO] Domínio no banco...`);
       const { error: updateError } = await supabase
         .from("domains")
         .update({
           status,
+          confirmed_status: confirmedStatus,
           uptime,
           response_time: responseTime,
           last_checked_at: new Date().toISOString(),
@@ -169,131 +222,112 @@ export async function GET(request: Request) {
       }
       console.log(`   ✅ Domínio atualizado com sucesso`);
 
-      // 6. Verificar se precisa enviar alerta WhatsApp
-      console.log(`   📱 [WHATSAPP] Verificando se precisa enviar alerta...`);
+      // 6. Verificar se precisa enviar alerta WhatsApp (APENAS SE CONFIRMADO)
+      if (shouldNotify) {
+        console.log(`   📱 [WHATSAPP] Enviando alerta (status confirmado)...`);
 
-      // 6.1: Buscar o perfil do usuário (COM TODAS AS CREDENCIAIS!)
-      const { data: userProfile, error: profileError } = await supabase
-        .from("profiles")
-        .select("whatsapp_number, twilio_sid, twilio_token, twilio_from, whatsapp_apikey")
-        .eq("id", domain.user_id)
-        .single();
+        // 6.1: Buscar o perfil do usuário (COM TODAS AS CREDENCIAIS!)
+        const { data: userProfile, error: profileError } = await supabase
+          .from("profiles")
+          .select("whatsapp_number, twilio_sid, twilio_token, twilio_from, whatsapp_apikey")
+          .eq("id", domain.user_id)
+          .single();
 
-      if (profileError || !userProfile?.whatsapp_number) {
-        console.log(`   ⚠️ Usuário não tem WhatsApp configurado, pulando alerta`);
-        continue;
-      }
-
-      // 6.2: Verificar se o status mudou
-      const { data: previousLogs } = await supabase
-        .from("uptime_logs")
-        .select("status")
-        .eq("domain_id", domain.id)
-        .order("checked_at", { ascending: false })
-        .limit(2);
-
-      // Se não há histórico anterior, não envia alerta
-      if (!previousLogs || previousLogs.length < 2) {
-        console.log(`   ⏭️ Sem histórico anterior, pulando alerta`);
-        continue;
-      }
-
-      const previousStatus = previousLogs[1].status;
-      const statusChanged = previousStatus !== status;
-
-      if (statusChanged) {
-        console.log(`   ✅ Status mudou de ${previousStatus} para ${status}, enviando alerta...`);
-
-        const isNowOffline = status === "offline";
-        
-        // Converter para GMT-3 (Brasil) - America/Sao_Paulo
-        const horarioBrasil = new Date().toLocaleString("pt-BR", { 
-          timeZone: "America/Sao_Paulo",
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit"
-        });
-        
-        const whatsappMessage = isNowOffline
-          ? `🚨 ALERTA: Seu domínio "${domain.name}" ficou OFFLINE!\n\nURL: ${domain.url}\nHorário: ${horarioBrasil}`
-          : `✅ ALERTA RESOLVIDO: Seu domínio "${domain.name}" voltou ONLINE!\n\nURL: ${domain.url}\nHorário: ${horarioBrasil}`;
-
-        // ✅ FALLBACK PARA TODAS AS CREDENCIAIS!
-        let twilio_sid = userProfile.twilio_sid || process.env.TWILIO_ACCOUNT_SID;
-        let twilio_token = userProfile.twilio_token || process.env.TWILIO_AUTH_TOKEN;
-        let twilio_from = userProfile.twilio_from || process.env.TWILIO_WHATSAPP_FROM;
-        const whatsapp_number = userProfile.whatsapp_number;
-
-        // Log de onde as credenciais vieram
-        if (userProfile.twilio_sid) console.log(`   ℹ️ Usando TWILIO_ACCOUNT_SID do banco`);
-        else console.log(`   ℹ️ Usando TWILIO_ACCOUNT_SID da Vercel`);
-        
-        if (userProfile.twilio_token) console.log(`   ℹ️ Usando TWILIO_AUTH_TOKEN do banco`);
-        else console.log(`   ℹ️ Usando TWILIO_AUTH_TOKEN da Vercel`);
-        
-        if (userProfile.twilio_from) console.log(`   ℹ️ Usando TWILIO_WHATSAPP_FROM do banco`);
-        else console.log(`   ℹ️ Usando TWILIO_WHATSAPP_FROM da Vercel`);
-
-        // Verificar se tem credenciais
-        if (!twilio_sid || !twilio_token || !twilio_from) {
-          console.log(`   ⚠️ Credenciais incompletas do Twilio (banco e Vercel)`);
-          continue;
-        }
-
-        try {
-          // Garantir que From e To têm o prefixo whatsapp:
-          const fromNumber = twilio_from.startsWith("whatsapp:") ? twilio_from : `whatsapp:${twilio_from}`;
-          const toNumber = whatsapp_number.startsWith("whatsapp:") ? whatsapp_number : `whatsapp:${whatsapp_number}`;
+        if (profileError || !userProfile?.whatsapp_number) {
+          console.log(`   ⚠️ Usuário não tem WhatsApp configurado, pulando alerta`);
+        } else {
+          const isNowOffline = status === "offline";
           
-          console.log(`   📤 Enviando WhatsApp: From=${fromNumber}, To=${toNumber}`);
-          
-          // Construir o body como string (não usar URLSearchParams que faz encoding)
-          const bodyParams = new URLSearchParams();
-          bodyParams.append("From", fromNumber);
-          bodyParams.append("To", toNumber);
-          bodyParams.append("Body", whatsappMessage);
-          
-          const response = await fetch("https://api.twilio.com/2010-04-01/Accounts/" + twilio_sid + "/Messages.json", {
-            method: "POST",
-            headers: {
-              Authorization: `Basic ${Buffer.from(`${twilio_sid}:${twilio_token}`).toString("base64")}`,
-              "Content-Type": "application/x-www-form-urlencoded",
-            },
-            body: bodyParams.toString(),
+          // Converter para GMT-3 (Brasil) - America/Sao_Paulo
+          const horarioBrasil = new Date().toLocaleString("pt-BR", { 
+            timeZone: "America/Sao_Paulo",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit"
           });
+          
+          const whatsappMessage = isNowOffline
+            ? `🚨 ALERTA: Seu domínio "${domain.name}" ficou OFFLINE!\n\nURL: ${domain.url}\nHorário: ${horarioBrasil}`
+            : `✅ ALERTA RESOLVIDO: Seu domínio "${domain.name}" voltou ONLINE!\n\nURL: ${domain.url}\nHorário: ${horarioBrasil}`;
 
-          if (response.ok) {
-            console.log(`   ✅ WhatsApp enviado com sucesso!`);
-            
-            // Salvar o alerta no banco
-            await supabase.from("alerts").insert({
-              user_id: domain.user_id,
-              domain_id: domain.id,
-              alert_type: isNowOffline ? "offline" : "online",
-              message: whatsappMessage,
-              sent_at: new Date().toISOString(),
-            });
+          // ✅ FALLBACK PARA TODAS AS CREDENCIAIS!
+          let twilio_sid = userProfile.twilio_sid || process.env.TWILIO_ACCOUNT_SID;
+          let twilio_token = userProfile.twilio_token || process.env.TWILIO_AUTH_TOKEN;
+          let twilio_from = userProfile.twilio_from || process.env.TWILIO_WHATSAPP_FROM;
+          const whatsapp_number = userProfile.whatsapp_number;
+
+          // Log de onde as credenciais vieram
+          if (userProfile.twilio_sid) console.log(`   ℹ️ Usando TWILIO_ACCOUNT_SID do banco`);
+          else console.log(`   ℹ️ Usando TWILIO_ACCOUNT_SID da Vercel`);
+          
+          if (userProfile.twilio_token) console.log(`   ℹ️ Usando TWILIO_AUTH_TOKEN do banco`);
+          else console.log(`   ℹ️ Usando TWILIO_AUTH_TOKEN da Vercel`);
+          
+          if (userProfile.twilio_from) console.log(`   ℹ️ Usando TWILIO_WHATSAPP_FROM do banco`);
+          else console.log(`   ℹ️ Usando TWILIO_WHATSAPP_FROM da Vercel`);
+
+          // Verificar se tem credenciais
+          if (!twilio_sid || !twilio_token || !twilio_from) {
+            console.log(`   ⚠️ Credenciais incompletas do Twilio (banco e Vercel)`);
           } else {
-            const errorData = await response.json();
-            console.error(`   ❌ Erro ao enviar WhatsApp:`, errorData);
+            try {
+              // Garantir que From e To têm o prefixo whatsapp:
+              const fromNumber = twilio_from.startsWith("whatsapp:") ? twilio_from : `whatsapp:${twilio_from}`;
+              const toNumber = whatsapp_number.startsWith("whatsapp:") ? whatsapp_number : `whatsapp:${whatsapp_number}`;
+              
+              console.log(`   📤 Enviando WhatsApp: From=${fromNumber}, To=${toNumber}`);
+              
+              // Construir o body como string (não usar URLSearchParams que faz encoding)
+              const bodyParams = new URLSearchParams();
+              bodyParams.append("From", fromNumber);
+              bodyParams.append("To", toNumber);
+              bodyParams.append("Body", whatsappMessage);
+              
+              const response = await fetch("https://api.twilio.com/2010-04-01/Accounts/" + twilio_sid + "/Messages.json", {
+                method: "POST",
+                headers: {
+                  Authorization: `Basic ${Buffer.from(`${twilio_sid}:${twilio_token}`).toString("base64")}`,
+                  "Content-Type": "application/x-www-form-urlencoded",
+                },
+                body: bodyParams.toString(),
+              });
+
+              if (response.ok) {
+                console.log(`   ✅ WhatsApp enviado com sucesso!`);
+                
+                // Salvar o alerta no banco
+                await supabase.from("alerts").insert({
+                  user_id: domain.user_id,
+                  domain_id: domain.id,
+                  alert_type: isNowOffline ? "offline" : "online",
+                  message: whatsappMessage,
+                  sent_at: new Date().toISOString(),
+                });
+              } else {
+                const errorData = await response.json();
+                console.error(`   ❌ Erro ao enviar WhatsApp:`, errorData);
+              }
+            } catch (whatsappError) {
+              console.error(`   ❌ Erro ao enviar WhatsApp:`, whatsappError);
+            }
           }
-        } catch (whatsappError) {
-          console.error(`   ❌ Erro ao enviar WhatsApp:`, whatsappError);
         }
       } else {
-        console.log(`   ⏭️ Status não mudou (${status}), pulando alerta`);
+        console.log(`   ⏭️ Sem notificação necessária (status não confirmado ou sem mudança)`);
       }
 
       results.push({
         domain: domain.name,
         url: domain.url,
         status,
+        confirmedStatus,
         uptime,
         responseTime,
         sslExpiry: sslExpiry ? sslExpiry.toISOString() : null,
+        notified: shouldNotify,
       });
     }
 

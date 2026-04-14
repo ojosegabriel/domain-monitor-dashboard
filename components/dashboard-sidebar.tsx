@@ -61,7 +61,7 @@ export function DashboardSidebar({ activeTab, onTabChange, onLogout }: Dashboard
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-[hsl(210,20%,60%)] transition-colors hover:bg-[hsl(215,25%,20%)] hover:text-[hsl(0,0%,100%)]"
         >
           <LogOut className="h-4.5 w-4.5" />
-          deslogar
+          Logout
         </button>
       </div>
     </aside>
