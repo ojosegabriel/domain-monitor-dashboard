@@ -5,7 +5,7 @@ import * as net from "net";
 
 // ===== CONFIGURAÇÃO =====
 const CONFIRMATION_THRESHOLD = 3;
-const SSL_EXPIRY_WARNING_DAYS = 365; // Alertar 30 dias antes
+const SSL_EXPIRY_WARNING_DAYS = 30; // Alertar 30 dias antes
 
 // Função para verificar SSL usando tls.connect (forma correta!)
 async function getSSLCertificateInfo(hostname: string): Promise<{ expiry: Date | null; status: string }> {
