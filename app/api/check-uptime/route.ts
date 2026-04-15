@@ -2,8 +2,6 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 // ===== CONFIGURAÇÃO =====
-// Número de checks consecutivos necessários para confirmar uma mudança de estado
-// Exemplo: CONFIRMATION_THRESHOLD = 3 significa que precisa de 3 checks offline para notificar a queda
 const CONFIRMATION_THRESHOLD = 3;
 
 export async function GET(request: Request) {
@@ -52,6 +50,8 @@ export async function GET(request: Request) {
       let status = "online";
       let responseTime = 0;
       let sslExpiry: Date | null = null;
+      let sslStatus = "unknown";
+      let sslCheckedAt: Date | null = null;
 
       try {
         // 2.1: Verificar se o site está online
@@ -76,17 +76,20 @@ export async function GET(request: Request) {
           console.log(`   ✅ Status HTTP: ${response.status} (online)`);
         }
 
-        // 2.3: Verificar SSL
+        // 2.3: Verificar SSL com API confiável (usando crt.sh)
         if (domain.url.startsWith("https://")) {
           try {
             const urlObj = new URL(domain.url);
             const hostname = urlObj.hostname;
 
+            console.log(`   🔍 Verificando SSL para: ${hostname}`);
+
+            // Usar API crt.sh que é mais confiável
             const sslController = new AbortController();
             const sslTimeoutId = setTimeout(() => sslController.abort(), 5000);
 
             const sslCheckResponse = await fetch(
-              `https://ssl-api.com/api/v3/certinfo?host=${hostname}`,
+              `https://crt.sh/?q=${encodeURIComponent(hostname)}&output=json`,
               { signal: sslController.signal }
             );
 
@@ -94,14 +97,37 @@ export async function GET(request: Request) {
 
             if (sslCheckResponse.ok) {
               const sslData = await sslCheckResponse.json();
-              if (sslData.certs && sslData.certs[0]) {
-                const certInfo = sslData.certs[0];
-                sslExpiry = new Date(certInfo.not_after * 1000);
-                console.log(`   🔐 SSL válido até: ${sslExpiry.toLocaleDateString("pt-BR")}`);
+              
+              if (Array.isArray(sslData) && sslData.length > 0) {
+                // Pegar o certificado mais recente
+                const latestCert = sslData[0];
+                
+                // Extrair a data de expiração do campo not_after
+                if (latestCert.not_after) {
+                  sslExpiry = new Date(latestCert.not_after);
+                  sslCheckedAt = new Date();
+                  
+                  // Verificar se o SSL está válido
+                  const now = new Date();
+                  if (sslExpiry > now) {
+                    sslStatus = "valid";
+                    console.log(`   🔐 SSL válido até: ${sslExpiry.toLocaleDateString("pt-BR")}`);
+                  } else {
+                    sslStatus = "expired";
+                    console.log(`   ⚠️ SSL EXPIRADO em: ${sslExpiry.toLocaleDateString("pt-BR")}`);
+                  }
+                }
+              } else {
+                console.log(`   ⚠️ Nenhum certificado encontrado para ${hostname}`);
+                sslStatus = "not_found";
               }
+            } else {
+              console.log(`   ⚠️ Erro ao verificar SSL (status: ${sslCheckResponse.status})`);
+              sslStatus = "error";
             }
           } catch (sslError) {
-            console.log(`   ⚠️ SSL check falhou (continuando sem SSL info)`);
+            console.log(`   ⚠️ SSL check falhou: ${sslError instanceof Error ? sslError.message : String(sslError)}`);
+            sslStatus = "error";
           }
         }
       } catch (error) {
@@ -150,7 +176,6 @@ export async function GET(request: Request) {
         uptime = Math.round((onlineCount / allLogs.length) * 100);
         console.log(`   ✅ Uptime calculado: ${uptime}% (${onlineCount}/${allLogs.length})`);
       } else {
-        // Se não houver logs de 24h, usa o status atual
         uptime = status === "online" ? 100 : 0;
         console.log(`   ℹ️ Sem logs de 24h, usando status atual: ${uptime}%`);
       }
@@ -175,6 +200,8 @@ export async function GET(request: Request) {
       let confirmedStatus = domain.confirmed_status || "online";
       let shouldNotify = false;
       let notificationReason = "";
+      let lastStatusChange = domain.last_status_change;
+      let consecutiveChecks = domain.consecutive_checks || 0;
 
       if (recentLogs && recentLogs.length === CONFIRMATION_THRESHOLD) {
         // Verificar se todos os checks têm o mesmo status
@@ -184,22 +211,28 @@ export async function GET(request: Request) {
           // Status mudou e foi confirmado por N checks consecutivos
           shouldNotify = true;
           confirmedStatus = status;
+          lastStatusChange = new Date().toISOString();
+          consecutiveChecks = CONFIRMATION_THRESHOLD;
           notificationReason = `Status confirmado após ${CONFIRMATION_THRESHOLD} checks consecutivos: ${status}`;
           console.log(`   ✅ ${notificationReason}`);
         } else if (!allSameStatus) {
           // Ainda há oscilação - não notifica
           console.log(`   ⏭️ Oscilação detectada (flapping) - aguardando confirmação`);
           console.log(`      Últimos checks: ${recentLogs.map((l) => l.status).reverse().join(" -> ")}`);
+          consecutiveChecks = 0;
         } else {
           // Status é o mesmo que o confirmado - sem mudança
           console.log(`   ℹ️ Status mantém-se ${status} (sem mudança)`);
+          consecutiveChecks = CONFIRMATION_THRESHOLD;
         }
       } else if (recentLogs && recentLogs.length > 0) {
         // Menos de N checks disponíveis - ainda em fase de coleta
         console.log(`   ⏳ Coletando dados para confirmação (${recentLogs.length}/${CONFIRMATION_THRESHOLD})`);
+        consecutiveChecks = recentLogs.length;
       } else {
         // Primeiro check - não notifica
         console.log(`   ℹ️ Primeiro check - sem histórico para comparação`);
+        consecutiveChecks = 1;
       }
 
       // 5. Atualizar o domínio com status confirmado
@@ -213,6 +246,10 @@ export async function GET(request: Request) {
           response_time: responseTime,
           last_checked_at: new Date().toISOString(),
           ssl_expiry_date: sslExpiry ? sslExpiry.toISOString() : null,
+          ssl_status: sslStatus,
+          ssl_checked_at: sslCheckedAt ? sslCheckedAt.toISOString() : null,
+          last_status_change: lastStatusChange,
+          consecutive_checks: consecutiveChecks,
         })
         .eq("id", domain.id);
 
@@ -327,6 +364,7 @@ export async function GET(request: Request) {
         uptime,
         responseTime,
         sslExpiry: sslExpiry ? sslExpiry.toISOString() : null,
+        sslStatus,
         notified: shouldNotify,
       });
     }
