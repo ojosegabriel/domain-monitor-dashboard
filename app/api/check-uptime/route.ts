@@ -1,8 +1,72 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import * as https from "https";
 
 // ===== CONFIGURAÇÃO =====
 const CONFIRMATION_THRESHOLD = 3;
+
+// Função para verificar SSL usando Node.js nativo (muito mais rápido!)
+async function getSSLCertificateInfo(hostname: string): Promise<{ expiry: Date | null; status: string }> {
+  return new Promise((resolve) => {
+    try {
+      const options = {
+        hostname: hostname,
+        port: 443,
+        method: "HEAD",
+        timeout: 5000,
+      };
+
+      const req = https.request(options, (res) => {
+        try {
+          const cert = res.socket?.getPeerCertificate?.();
+          
+          if (!cert || Object.keys(cert).length === 0) {
+            console.log(`   ⚠️ Nenhum certificado encontrado para ${hostname}`);
+            resolve({ expiry: null, status: "not_found" });
+            return;
+          }
+
+          const validTo = cert.valid_to;
+          if (!validTo) {
+            console.log(`   ⚠️ Certificado sem data de expiração`);
+            resolve({ expiry: null, status: "invalid" });
+            return;
+          }
+
+          const expiryDate = new Date(validTo);
+          const now = new Date();
+          
+          if (expiryDate > now) {
+            console.log(`   🔐 SSL válido até: ${expiryDate.toLocaleDateString("pt-BR")}`);
+            resolve({ expiry: expiryDate, status: "valid" });
+          } else {
+            console.log(`   ⚠️ SSL EXPIRADO em: ${expiryDate.toLocaleDateString("pt-BR")}`);
+            resolve({ expiry: expiryDate, status: "expired" });
+          }
+        } catch (error) {
+          console.log(`   ⚠️ Erro ao processar certificado: ${error instanceof Error ? error.message : String(error)}`);
+          resolve({ expiry: null, status: "error" });
+        }
+      });
+
+      req.on("error", (error) => {
+        console.log(`   ⚠️ Erro na conexão SSL: ${error instanceof Error ? error.message : String(error)}`);
+        resolve({ expiry: null, status: "error" });
+      });
+
+      req.on("timeout", () => {
+        console.log(`   ⚠️ Timeout na verificação SSL`);
+        req.destroy();
+        resolve({ expiry: null, status: "timeout" });
+      });
+
+      req.end();
+    } catch (error) {
+      console.log(`   ⚠️ Erro geral SSL: ${error instanceof Error ? error.message : String(error)}`);
+      resolve({ expiry: null, status: "error" });
+    }
+  });
+}
 
 export async function GET(request: Request) {
   console.log("🚀 [INICIO] Verificação de domínios iniciada");
@@ -76,7 +140,7 @@ export async function GET(request: Request) {
           console.log(`   ✅ Status HTTP: ${response.status} (online)`);
         }
 
-        // 2.3: Verificar SSL com API confiável (usando crt.sh)
+        // 2.3: Verificar SSL com Node.js nativo (muito mais rápido!)
         if (domain.url.startsWith("https://")) {
           try {
             const urlObj = new URL(domain.url);
@@ -84,46 +148,16 @@ export async function GET(request: Request) {
 
             console.log(`   🔍 Verificando SSL para: ${hostname}`);
 
-            // Usar API crt.sh que é mais confiável
-            const sslController = new AbortController();
-            const sslTimeoutId = setTimeout(() => sslController.abort(), 5000);
-
-            const sslCheckResponse = await fetch(
-              `https://crt.sh/?q=${encodeURIComponent(hostname)}&output=json`,
-              { signal: sslController.signal }
-            );
-
-            clearTimeout(sslTimeoutId);
-
-            if (sslCheckResponse.ok) {
-              const sslData = await sslCheckResponse.json();
-              
-              if (Array.isArray(sslData) && sslData.length > 0) {
-                // Pegar o certificado mais recente
-                const latestCert = sslData[0];
-                
-                // Extrair a data de expiração do campo not_after
-                if (latestCert.not_after) {
-                  sslExpiry = new Date(latestCert.not_after);
-                  sslCheckedAt = new Date();
-                  
-                  // Verificar se o SSL está válido
-                  const now = new Date();
-                  if (sslExpiry > now) {
-                    sslStatus = "valid";
-                    console.log(`   🔐 SSL válido até: ${sslExpiry.toLocaleDateString("pt-BR")}`);
-                  } else {
-                    sslStatus = "expired";
-                    console.log(`   ⚠️ SSL EXPIRADO em: ${sslExpiry.toLocaleDateString("pt-BR")}`);
-                  }
-                }
-              } else {
-                console.log(`   ⚠️ Nenhum certificado encontrado para ${hostname}`);
-                sslStatus = "not_found";
-              }
+            // Usar Node.js nativo para verificar SSL
+            const sslInfo = await getSSLCertificateInfo(hostname);
+            
+            if (sslInfo.expiry) {
+              sslExpiry = sslInfo.expiry;
+              sslStatus = sslInfo.status;
+              sslCheckedAt = new Date();
             } else {
-              console.log(`   ⚠️ Erro ao verificar SSL (status: ${sslCheckResponse.status})`);
-              sslStatus = "error";
+              sslStatus = sslInfo.status;
+              sslCheckedAt = new Date();
             }
           } catch (sslError) {
             console.log(`   ⚠️ SSL check falhou: ${sslError instanceof Error ? sslError.message : String(sslError)}`);
