@@ -1,70 +1,89 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import * as https from "https";
+import * as tls from "tls";
+import * as net from "net";
 
 // ===== CONFIGURAÇÃO =====
 const CONFIRMATION_THRESHOLD = 3;
 
-// Função para verificar SSL usando Node.js nativo (muito mais rápido!)
+// Função para verificar SSL usando tls.connect (forma correta!)
 async function getSSLCertificateInfo(hostname: string): Promise<{ expiry: Date | null; status: string }> {
   return new Promise((resolve) => {
     try {
-      const options = {
-        hostname: hostname,
-        port: 443,
-        method: "HEAD",
-        timeout: 5000,
-      };
+      // Criar conexão socket
+      const socket = net.createConnection({ host: hostname, port: 443 });
+      let timeoutHandle: NodeJS.Timeout | null = null;
 
-      const req = https.request(options, (res) => {
-        try {
-          // Acessar o certificado corretamente
-          const tlsSocket = res.socket as any;
-          const cert = tlsSocket?.getPeerCertificate?.();
-          
-          if (!cert || Object.keys(cert).length === 0) {
-            console.log(`   ⚠️ Nenhum certificado encontrado para ${hostname}`);
-            resolve({ expiry: null, status: "not_found" });
-            return;
-          }
+      socket.on("connect", () => {
+        // Fazer upgrade para TLS
+        const tlsSocket = tls.connect(
+          { socket: socket, servername: hostname, rejectUnauthorized: false },
+          () => {
+            try {
+              // Limpar timeout
+              if (timeoutHandle) clearTimeout(timeoutHandle);
 
-          // Tentar obter a data de expiração
-          let validTo = cert.valid_to || cert.notAfter;
-          
-          if (!validTo) {
-            console.log(`   ⚠️ Certificado sem data de expiração`);
-            resolve({ expiry: null, status: "invalid" });
-            return;
-          }
+              // Obter o certificado durante o handshake
+              const cert = tlsSocket.getPeerCertificate();
+              
+              if (!cert || Object.keys(cert).length === 0) {
+                console.log(`   ⚠️ Nenhum certificado encontrado para ${hostname}`);
+                tlsSocket.destroy();
+                resolve({ expiry: null, status: "not_found" });
+                return;
+              }
 
-          const expiryDate = new Date(validTo);
-          const now = new Date();
-          
-          if (expiryDate > now) {
-            console.log(`   🔐 SSL válido até: ${expiryDate.toLocaleDateString("pt-BR")}`);
-            resolve({ expiry: expiryDate, status: "valid" });
-          } else {
-            console.log(`   ⚠️ SSL EXPIRADO em: ${expiryDate.toLocaleDateString("pt-BR")}`);
-            resolve({ expiry: expiryDate, status: "expired" });
+              // Obter a data de expiração
+              const validTo = (cert as any).valid_to;
+              
+              if (!validTo) {
+                console.log(`   ⚠️ Certificado sem data de expiração`);
+                tlsSocket.destroy();
+                resolve({ expiry: null, status: "invalid" });
+                return;
+              }
+
+              const expiryDate = new Date(validTo);
+              const now = new Date();
+              
+              if (expiryDate > now) {
+                console.log(`   🔐 SSL válido até: ${expiryDate.toLocaleDateString("pt-BR")}`);
+                tlsSocket.destroy();
+                resolve({ expiry: expiryDate, status: "valid" });
+              } else {
+                console.log(`   ⚠️ SSL EXPIRADO em: ${expiryDate.toLocaleDateString("pt-BR")}`);
+                tlsSocket.destroy();
+                resolve({ expiry: expiryDate, status: "expired" });
+              }
+            } catch (error) {
+              console.log(`   ⚠️ Erro ao processar certificado: ${error instanceof Error ? error.message : String(error)}`);
+              tlsSocket.destroy();
+              resolve({ expiry: null, status: "error" });
+            }
           }
-        } catch (error) {
-          console.log(`   ⚠️ Erro ao processar certificado: ${error instanceof Error ? error.message : String(error)}`);
+        );
+
+        tlsSocket.on("error", (error) => {
+          if (timeoutHandle) clearTimeout(timeoutHandle);
+          console.log(`   ⚠️ Erro na conexão TLS: ${error instanceof Error ? error.message : String(error)}`);
+          tlsSocket.destroy();
           resolve({ expiry: null, status: "error" });
-        }
+        });
       });
 
-      req.on("error", (error) => {
-        console.log(`   ⚠️ Erro na conexão SSL: ${error instanceof Error ? error.message : String(error)}`);
+      socket.on("error", (error) => {
+        if (timeoutHandle) clearTimeout(timeoutHandle);
+        console.log(`   ⚠️ Erro na conexão socket: ${error instanceof Error ? error.message : String(error)}`);
+        socket.destroy();
         resolve({ expiry: null, status: "error" });
       });
 
-      req.on("timeout", () => {
+      // Timeout de 5 segundos
+      timeoutHandle = setTimeout(() => {
         console.log(`   ⚠️ Timeout na verificação SSL`);
-        req.destroy();
+        socket.destroy();
         resolve({ expiry: null, status: "timeout" });
-      });
-
-      req.end();
+      }, 5000);
     } catch (error) {
       console.log(`   ⚠️ Erro geral SSL: ${error instanceof Error ? error.message : String(error)}`);
       resolve({ expiry: null, status: "error" });
@@ -144,7 +163,7 @@ export async function GET(request: Request) {
           console.log(`   ✅ Status HTTP: ${response.status} (online)`);
         }
 
-        // 2.3: Verificar SSL com Node.js nativo (muito mais rápido!)
+        // 2.3: Verificar SSL com tls.connect (forma correta!)
         if (domain.url.startsWith("https://")) {
           try {
             const urlObj = new URL(domain.url);
@@ -152,7 +171,7 @@ export async function GET(request: Request) {
 
             console.log(`   🔍 Verificando SSL para: ${hostname}`);
 
-            // Usar Node.js nativo para verificar SSL
+            // Usar tls.connect para verificar SSL
             const sslInfo = await getSSLCertificateInfo(hostname);
             
             if (sslInfo.expiry) {
