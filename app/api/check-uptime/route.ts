@@ -18,7 +18,9 @@ async function getSSLCertificateInfo(hostname: string): Promise<{ expiry: Date |
 
       const req = https.request(options, (res) => {
         try {
-          const cert = res.socket?.getPeerCertificate?.();
+          // Acessar o certificado corretamente
+          const tlsSocket = res.socket as any;
+          const cert = tlsSocket?.getPeerCertificate?.();
           
           if (!cert || Object.keys(cert).length === 0) {
             console.log(`   ⚠️ Nenhum certificado encontrado para ${hostname}`);
@@ -26,7 +28,9 @@ async function getSSLCertificateInfo(hostname: string): Promise<{ expiry: Date |
             return;
           }
 
-          const validTo = cert.valid_to;
+          // Tentar obter a data de expiração
+          let validTo = cert.valid_to || cert.notAfter;
+          
           if (!validTo) {
             console.log(`   ⚠️ Certificado sem data de expiração`);
             resolve({ expiry: null, status: "invalid" });
