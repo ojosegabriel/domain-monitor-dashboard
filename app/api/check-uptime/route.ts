@@ -5,6 +5,7 @@ import * as net from "net";
 
 // ===== CONFIGURAÇÃO =====
 const CONFIRMATION_THRESHOLD = 3;
+const SSL_EXPIRY_WARNING_DAYS = 30; // Alertar 30 dias antes
 
 // Função para verificar SSL usando tls.connect (forma correta!)
 async function getSSLCertificateInfo(hostname: string): Promise<{ expiry: Date | null; status: string }> {
@@ -89,6 +90,124 @@ async function getSSLCertificateInfo(hostname: string): Promise<{ expiry: Date |
       resolve({ expiry: null, status: "error" });
     }
   });
+}
+
+// Função para verificar se o SSL está expirando e enviar alerta
+async function checkAndAlertSSLExpiry(
+  supabase: any,
+  domain: any,
+  sslExpiry: Date | null,
+  sslStatus: string
+) {
+  if (!sslExpiry || sslStatus !== "valid") {
+    return; // Não verificar se não temos data ou SSL não é válido
+  }
+
+  const now = new Date();
+  const daysUntilExpiry = Math.floor((sslExpiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+  console.log(`   📅 SSL expira em ${daysUntilExpiry} dias`);
+
+  // Verificar se está dentro da janela de alerta (30 dias)
+  if (daysUntilExpiry <= SSL_EXPIRY_WARNING_DAYS && daysUntilExpiry > 0) {
+    console.log(`   🔔 [SSL ALERT] SSL expirando em ${daysUntilExpiry} dias!`);
+
+    // Verificar se já enviamos alerta hoje para este domínio
+    const today = new Date().toISOString().split("T")[0];
+    
+    const { data: existingAlert, error: checkError } = await supabase
+      .from("alerts")
+      .select("id")
+      .eq("domain_id", domain.id)
+      .eq("alert_type", "ssl_expiry")
+      .gte("sent_at", `${today}T00:00:00`)
+      .single();
+
+    if (existingAlert) {
+      console.log(`   ⏭️ Alerta de SSL já enviado hoje, pulando...`);
+      return;
+    }
+
+    // Buscar o perfil do usuário
+    const { data: userProfile, error: profileError } = await supabase
+      .from("profiles")
+      .select("whatsapp_number, twilio_sid, twilio_token, twilio_from")
+      .eq("id", domain.user_id)
+      .single();
+
+    if (profileError || !userProfile?.whatsapp_number) {
+      console.log(`   ⚠️ Usuário não tem WhatsApp configurado, pulando alerta de SSL`);
+      return;
+    }
+
+    // Converter para GMT-3 (Brasil)
+    const horarioBrasil = new Date().toLocaleString("pt-BR", { 
+      timeZone: "America/Sao_Paulo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit"
+    });
+
+    const dataExpiracaoBrasil = sslExpiry.toLocaleDateString("pt-BR");
+
+    const whatsappMessage = `⚠️ ATENÇÃO SSL: Seu certificado SSL do domínio "${domain.name}" expira em ${daysUntilExpiry} dias!\n\nURL: ${domain.url}\nData de Expiração: ${dataExpiracaoBrasil}\nHorário do Alerta: ${horarioBrasil}\n\nRenove seu certificado em breve!`;
+
+    // Fallback para credenciais
+    let twilio_sid = userProfile.twilio_sid || process.env.TWILIO_ACCOUNT_SID;
+    let twilio_token = userProfile.twilio_token || process.env.TWILIO_AUTH_TOKEN;
+    let twilio_from = userProfile.twilio_from || process.env.TWILIO_WHATSAPP_FROM;
+    const whatsapp_number = userProfile.whatsapp_number;
+
+    if (!twilio_sid || !twilio_token || !twilio_from) {
+      console.log(`   ⚠️ Credenciais incompletas do Twilio para alerta SSL`);
+      return;
+    }
+
+    try {
+      // Garantir que From e To têm o prefixo whatsapp:
+      const fromNumber = twilio_from.startsWith("whatsapp:") ? twilio_from : `whatsapp:${twilio_from}`;
+      const toNumber = whatsapp_number.startsWith("whatsapp:") ? whatsapp_number : `whatsapp:${whatsapp_number}`;
+      
+      console.log(`   📤 Enviando alerta SSL WhatsApp...`);
+      
+      const bodyParams = new URLSearchParams();
+      bodyParams.append("From", fromNumber);
+      bodyParams.append("To", toNumber);
+      bodyParams.append("Body", whatsappMessage);
+      
+      const response = await fetch("https://api.twilio.com/2010-04-01/Accounts/" + twilio_sid + "/Messages.json", {
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${twilio_sid}:${twilio_token}`).toString("base64")}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: bodyParams.toString(),
+      });
+
+      if (response.ok) {
+        console.log(`   ✅ Alerta SSL enviado com sucesso!`);
+        
+        // Salvar o alerta no banco
+        await supabase.from("alerts").insert({
+          user_id: domain.user_id,
+          domain_id: domain.id,
+          alert_type: "ssl_expiry",
+          message: whatsappMessage,
+          sent_at: new Date().toISOString(),
+        });
+      } else {
+        const errorData = await response.json();
+        console.error(`   ❌ Erro ao enviar alerta SSL:`, errorData);
+      }
+    } catch (error) {
+      console.error(`   ❌ Erro ao enviar alerta SSL:`, error);
+    }
+  } else if (daysUntilExpiry <= 0) {
+    console.log(`   🚨 SSL JÁ EXPIROU! Renove imediatamente!`);
+  }
 }
 
 export async function GET(request: Request) {
@@ -412,6 +531,10 @@ export async function GET(request: Request) {
       } else {
         console.log(`   ⏭️ Sem notificação necessária (status não confirmado ou sem mudança)`);
       }
+
+      // ===== NOVO: VERIFICAR ALERTA DE SSL EXPIRANDO =====
+      console.log(`   🔔 [SSL EXPIRY] Verificando se SSL está expirando...`);
+      await checkAndAlertSSLExpiry(supabase, domain, sslExpiry, sslStatus);
 
       results.push({
         domain: domain.name,
