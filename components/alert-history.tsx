@@ -1,9 +1,12 @@
 "use client"
 
-import { AlertTriangle, CheckCircle2, Clock, AlertCircle } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Clock, AlertCircle, Trash2 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import type { Alert } from "@/lib/types"
+import { useState } from "react"
+import { createClient } from "@/lib/supabase/client"
 
 interface AlertHistoryProps {
   alerts: Alert[]
@@ -57,7 +60,53 @@ function getAlertTypeInfo(alertType: string) {
   }
 }
 
-export function AlertHistory({ alerts }: AlertHistoryProps) {
+export function AlertHistory({ alerts: initialAlerts }: AlertHistoryProps) {
+  const [alerts, setAlerts] = useState(initialAlerts)
+  const [isDeleting, setIsDeleting] = useState<string | null>(null)
+  const supabase = createClient()
+
+  const handleMarkAsRead = async (alertId: string) => {
+    setIsDeleting(alertId)
+    try {
+      const { error } = await supabase
+        .from("alerts")
+        .update({ is_read: true })
+        .eq("id", alertId)
+
+      if (!error) {
+        // Remover do estado local
+        setAlerts(alerts.filter(a => a.id !== alertId))
+      } else {
+        console.error("Erro ao marcar como lido:", error)
+      }
+    } catch (err) {
+      console.error("Erro ao marcar como lido:", err)
+    } finally {
+      setIsDeleting(null)
+    }
+  }
+
+  const handleDeleteAlert = async (alertId: string) => {
+    setIsDeleting(alertId)
+    try {
+      const { error } = await supabase
+        .from("alerts")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", alertId)
+
+      if (!error) {
+        // Remover do estado local
+        setAlerts(alerts.filter(a => a.id !== alertId))
+      } else {
+        console.error("Erro ao deletar alerta:", error)
+      }
+    } catch (err) {
+      console.error("Erro ao deletar alerta:", err)
+    } finally {
+      setIsDeleting(null)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -79,10 +128,10 @@ export function AlertHistory({ alerts }: AlertHistoryProps) {
           ) : (
             <div className="divide-y divide-border">
               {alerts.map((alert) => {
-                // ✅ CORRIGIDO: Usar alert_type ao invés de type
                 const alertType = alert.alert_type || alert.type || "alert"
                 const typeInfo = getAlertTypeInfo(alertType)
                 const IconComponent = typeInfo.icon
+                const isDeleting_ = isDeleting === alert.id
 
                 return (
                   <div 
@@ -118,9 +167,30 @@ export function AlertHistory({ alerts }: AlertHistoryProps) {
                         <p className="mt-1 text-xs text-muted-foreground">{alert.domains.url}</p>
                       )}
                     </div>
-                    <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
-                      <Clock className="h-3 w-3" />
-                      {formatDate(alert.created_at)}
+                    <div className="flex shrink-0 items-center gap-3">
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Clock className="h-3 w-3" />
+                        {formatDate(alert.created_at)}
+                      </div>
+                      {/* Botão OK/Deletar */}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleMarkAsRead(alert.id)}
+                        disabled={isDeleting_}
+                        className="text-xs"
+                      >
+                        {isDeleting_ ? "..." : "OK"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleDeleteAlert(alert.id)}
+                        disabled={isDeleting_}
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
                 )
