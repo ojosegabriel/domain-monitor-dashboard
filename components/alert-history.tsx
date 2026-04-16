@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import type { Alert } from "@/lib/types"
 import { useState } from "react"
-import { createClient } from "@/lib/supabase/client"
 
 interface AlertHistoryProps {
   alerts: Alert[]
@@ -63,24 +62,34 @@ function getAlertTypeInfo(alertType: string) {
 export function AlertHistory({ alerts: initialAlerts }: AlertHistoryProps) {
   const [alerts, setAlerts] = useState(initialAlerts)
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
-  const supabase = createClient()
 
   const handleMarkAsRead = async (alertId: string) => {
     setIsDeleting(alertId)
     try {
-      const { error } = await supabase
-        .from("alerts")
-        .update({ is_read: true })
-        .eq("id", alertId)
+      const response = await fetch(`/api/alerts/${alertId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ action: "read" }),
+        credentials: "include", // Importante: enviar cookies de autenticação
+      })
 
-      if (!error) {
-        // Remover do estado local
-        setAlerts(alerts.filter(a => a.id !== alertId))
-      } else {
-        console.error("Erro ao marcar como lido:", error)
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error("Erro ao marcar como lido:", errorData)
+        alert(`Erro: ${errorData.error || "Falha ao marcar como lido"}`)
+        return
       }
+
+      const data = await response.json()
+      console.log("Sucesso:", data)
+      
+      // Remover do estado local
+      setAlerts(alerts.filter(a => a.id !== alertId))
     } catch (err) {
       console.error("Erro ao marcar como lido:", err)
+      alert("Erro ao marcar como lido")
     } finally {
       setIsDeleting(null)
     }
@@ -89,19 +98,30 @@ export function AlertHistory({ alerts: initialAlerts }: AlertHistoryProps) {
   const handleDeleteAlert = async (alertId: string) => {
     setIsDeleting(alertId)
     try {
-      const { error } = await supabase
-        .from("alerts")
-        .update({ deleted_at: new Date().toISOString() })
-        .eq("id", alertId)
+      const response = await fetch(`/api/alerts/${alertId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ action: "delete" }),
+        credentials: "include", // Importante: enviar cookies de autenticação
+      })
 
-      if (!error) {
-        // Remover do estado local
-        setAlerts(alerts.filter(a => a.id !== alertId))
-      } else {
-        console.error("Erro ao deletar alerta:", error)
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error("Erro ao deletar alerta:", errorData)
+        alert(`Erro: ${errorData.error || "Falha ao deletar alerta"}`)
+        return
       }
+
+      const data = await response.json()
+      console.log("Sucesso:", data)
+      
+      // Remover do estado local
+      setAlerts(alerts.filter(a => a.id !== alertId))
     } catch (err) {
       console.error("Erro ao deletar alerta:", err)
+      alert("Erro ao deletar alerta")
     } finally {
       setIsDeleting(null)
     }
