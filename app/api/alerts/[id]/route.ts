@@ -3,11 +3,11 @@ import { createClient } from "@/lib/supabase/server"
 
 export async function PATCH(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  ctx: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Aguardar os params (Next.js 15+)
-    const { id } = await params
+    // Aguardar os params (Next.js 16+)
+    const { id } = await ctx.params
     
     console.log("📍 ID recebido:", id)
     
