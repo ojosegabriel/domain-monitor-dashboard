@@ -120,7 +120,7 @@ async function checkAndAlertSSLExpiry(
       .select("id")
       .eq("domain_id", domain.id)
       .eq("alert_type", "ssl_expiry")
-      .gte("sent_at", `${today}T00:00:00`)
+      .gte("created_at", `${today}T00:00:00`)
       .single();
 
     if (existingAlert) {
@@ -196,7 +196,7 @@ async function checkAndAlertSSLExpiry(
           domain_id: domain.id,
           alert_type: "ssl_expiry",
           message: whatsappMessage,
-          sent_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
         });
       } else {
         const errorData = await response.json();
@@ -517,7 +517,7 @@ export async function GET(request: Request) {
                   domain_id: domain.id,
                   alert_type: isNowOffline ? "offline" : "online",
                   message: whatsappMessage,
-                  sent_at: new Date().toISOString(),
+                  created_at: new Date().toISOString(),
                 });
               } else {
                 const errorData = await response.json();

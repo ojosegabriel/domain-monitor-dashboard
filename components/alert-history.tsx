@@ -120,7 +120,7 @@ export function AlertHistory({ alerts }: AlertHistoryProps) {
                     </div>
                     <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
                       <Clock className="h-3 w-3" />
-                      {formatDate(alert.sent_at || alert.created_at)}
+                      {formatDate(alert.created_at)}
                     </div>
                   </div>
                 )

@@ -24,7 +24,6 @@ export interface Alert {
   alert_type: "offline" | "online" | "ssl_expiry" | "down" | "up" | "slow"
   type?: "down" | "up" | "slow" // Para compatibilidade com código antigo
   message: string
-  sent_at: string
   created_at: string
   domains?: {
     name: string
