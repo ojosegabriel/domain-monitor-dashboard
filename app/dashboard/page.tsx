@@ -19,13 +19,16 @@ export default async function DashboardRoute() {
   const { data: domains } = await supabase
     .from("domains")
     .select("*")
+    .eq("user_id", user.id)
     .order("created_at", { ascending: false })
 
+  // ✅ CORRIGIDO: Filtrar alertas por user_id do usuário logado
   const { data: alerts } = await supabase
     .from("alerts")
     .select("*, domains(name, url)")
-    .order("created_at", { ascending: false })
-    .limit(20)
+    .eq("user_id", user.id)
+    .order("sent_at", { ascending: false })
+    .limit(50)
 
   return (
     <DashboardPage
