@@ -66,29 +66,35 @@ export function AlertHistory({ alerts: initialAlerts }: AlertHistoryProps) {
   const handleMarkAsRead = async (alertId: string) => {
     setIsDeleting(alertId)
     try {
+      console.log("🔵 Marcando como lido:", alertId)
+      
       const response = await fetch(`/api/alerts/${alertId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ action: "read" }),
-        credentials: "include", // Importante: enviar cookies de autenticação
+        credentials: "include",
       })
 
+      console.log("📊 Response status:", response.status)
+      console.log("📊 Response headers:", response.headers)
+
+      const data = await response.json()
+      console.log("📊 Response data:", data)
+
       if (!response.ok) {
-        const errorData = await response.json()
-        console.error("Erro ao marcar como lido:", errorData)
-        alert(`Erro: ${errorData.error || "Falha ao marcar como lido"}`)
+        console.error("❌ Erro ao marcar como lido:", data)
+        alert(`Erro: ${data.error || "Falha ao marcar como lido"}`)
         return
       }
 
-      const data = await response.json()
-      console.log("Sucesso:", data)
+      console.log("✅ Sucesso ao marcar como lido:", data)
       
       // Remover do estado local
       setAlerts(alerts.filter(a => a.id !== alertId))
     } catch (err) {
-      console.error("Erro ao marcar como lido:", err)
+      console.error("❌ Erro ao marcar como lido:", err)
       alert("Erro ao marcar como lido")
     } finally {
       setIsDeleting(null)
@@ -98,29 +104,35 @@ export function AlertHistory({ alerts: initialAlerts }: AlertHistoryProps) {
   const handleDeleteAlert = async (alertId: string) => {
     setIsDeleting(alertId)
     try {
+      console.log("🔴 Deletando alerta:", alertId)
+      
       const response = await fetch(`/api/alerts/${alertId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ action: "delete" }),
-        credentials: "include", // Importante: enviar cookies de autenticação
+        credentials: "include",
       })
 
+      console.log("📊 Response status:", response.status)
+      console.log("📊 Response headers:", response.headers)
+
+      const data = await response.json()
+      console.log("📊 Response data:", data)
+
       if (!response.ok) {
-        const errorData = await response.json()
-        console.error("Erro ao deletar alerta:", errorData)
-        alert(`Erro: ${errorData.error || "Falha ao deletar alerta"}`)
+        console.error("❌ Erro ao deletar alerta:", data)
+        alert(`Erro: ${data.error || "Falha ao deletar alerta"}`)
         return
       }
 
-      const data = await response.json()
-      console.log("Sucesso:", data)
+      console.log("✅ Sucesso ao deletar alerta:", data)
       
       // Remover do estado local
       setAlerts(alerts.filter(a => a.id !== alertId))
     } catch (err) {
-      console.error("Erro ao deletar alerta:", err)
+      console.error("❌ Erro ao deletar alerta:", err)
       alert("Erro ao deletar alerta")
     } finally {
       setIsDeleting(null)
