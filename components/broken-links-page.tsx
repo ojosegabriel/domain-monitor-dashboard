@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Search, Link as LinkIcon, AlertTriangle, CheckCircle2, Loader2 } from "lucide-react"
+import { Search, Link as LinkIcon, AlertTriangle, CheckCircle2, Loader2, Check } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,11 +10,13 @@ import type { Domain } from "@/lib/types"
 type ScanMode = "distinct" | "all"
 
 type BrokenItem = {
+  id?: string
   page_url: string
   link_url: string
   link_text: string | null
   status_code: number | null
   server_response: string
+  is_resolved?: boolean
 }
 
 type ScanResponse = {
@@ -39,6 +41,7 @@ export function BrokenLinksPage({ domains }: { domains: Domain[] }) {
   const [error, setError] = useState<string | null>(null)
 
   const [search, setSearch] = useState("")
+  const [resolvedLinks, setResolvedLinks] = useState<Set<string>>(new Set())
 
   const filtered = useMemo(() => {
     const items = data?.results ?? []
@@ -57,6 +60,7 @@ export function BrokenLinksPage({ domains }: { domains: Domain[] }) {
     setLoading(true)
     setError(null)
     setData(null)
+    setResolvedLinks(new Set())
 
     try {
       const res = await fetch(`/api/domains/${selectedDomainId}/broken-links/scan`, {
@@ -78,6 +82,25 @@ export function BrokenLinksPage({ domains }: { domains: Domain[] }) {
       setError(e?.message || "Erro desconhecido")
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function markAsResolved(linkUrl: string) {
+    try {
+      const res = await fetch(`/api/broken-links/mark-resolved`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          domain_id: selectedDomainId,
+          link_url: linkUrl,
+        }),
+      })
+
+      if (res.ok) {
+        setResolvedLinks(new Set(resolvedLinks).add(linkUrl))
+      }
+    } catch (e) {
+      console.error("Erro ao marcar como resolvido:", e)
     }
   }
 
@@ -228,61 +251,85 @@ export function BrokenLinksPage({ domains }: { domains: Domain[] }) {
 
         <CardContent className="px-0 pb-0">
           <div className="hidden border-b border-border px-6 pb-3 md:grid md:grid-cols-12 md:gap-4">
-            <p className="col-span-4 text-xs font-medium uppercase tracking-wider text-muted-foreground">Broken link</p>
+            <p className="col-span-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">Broken link</p>
             <p className="col-span-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">Found on page</p>
-            <p className="col-span-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">Link text</p>
+            <p className="col-span-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Link text</p>
             <p className="col-span-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Response</p>
+            <p className="col-span-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Action</p>
           </div>
 
           <div className="divide-y divide-border">
-            {filtered.map((item, idx) => (
-              <div
-                key={`${item.page_url}-${item.link_url}-${idx}`}
-                className="grid grid-cols-1 gap-2 px-6 py-4 transition-colors hover:bg-muted/50 md:grid-cols-12 md:items-center md:gap-4"
-              >
-                <div className="col-span-4 flex items-center gap-2">
-                  <LinkIcon className="h-4 w-4 text-muted-foreground" />
-                  <a
-                    href={item.link_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="truncate text-sm font-medium text-foreground hover:underline"
-                    title={item.link_url}
-                  >
-                    {item.link_url}
-                  </a>
-                </div>
+            {filtered.map((item, idx) => {
+              const isResolved = resolvedLinks.has(item.link_url)
+              return (
+                <div
+                  key={`${item.page_url}-${item.link_url}-${idx}`}
+                  className={`grid grid-cols-1 gap-2 px-6 py-4 transition-colors hover:bg-muted/50 md:grid-cols-12 md:items-center md:gap-4 ${
+                    isResolved ? "opacity-50" : ""
+                  }`}
+                >
+                  <div className="col-span-3 flex items-center gap-2">
+                    <LinkIcon className="h-4 w-4 text-muted-foreground" />
+                    <a
+                      href={item.link_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="truncate text-sm font-medium text-foreground hover:underline"
+                      title={item.link_url}
+                    >
+                      {item.link_url}
+                    </a>
+                  </div>
 
-                <div className="col-span-3">
-                  <a
-                    href={item.page_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="truncate text-sm text-muted-foreground hover:underline"
-                    title={item.page_url}
-                  >
-                    {item.page_url}
-                  </a>
-                </div>
+                  <div className="col-span-3">
+                    <a
+                      href={item.page_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="truncate text-sm text-muted-foreground hover:underline"
+                      title={item.page_url}
+                    >
+                      {item.page_url}
+                    </a>
+                  </div>
 
-                <div className="col-span-3">
-                  <span className="truncate text-sm text-muted-foreground" title={item.link_text ?? ""}>
-                    {item.link_text || "—"}
-                  </span>
-                </div>
+                  <div className="col-span-2">
+                    <span className="truncate text-sm text-muted-foreground" title={item.link_text ?? ""}>
+                      {item.link_text || "—"}
+                    </span>
+                  </div>
 
-                <div className="col-span-2 flex items-center gap-2">
-                  {item.status_code ? (
-                    <AlertTriangle className="h-4 w-4 text-destructive" />
-                  ) : (
-                    <AlertTriangle className="h-4 w-4 text-destructive" />
-                  )}
-                  <span className="text-sm text-muted-foreground">
-                    {item.server_response}
-                  </span>
+                  <div className="col-span-2 flex items-center gap-2">
+                    {item.status_code ? (
+                      <AlertTriangle className="h-4 w-4 text-destructive" />
+                    ) : (
+                      <AlertTriangle className="h-4 w-4 text-destructive" />
+                    )}
+                    <span className="text-sm text-muted-foreground">
+                      {item.server_response}
+                    </span>
+                  </div>
+
+                  <div className="col-span-2 flex items-center gap-2">
+                    {isResolved ? (
+                      <div className="flex items-center gap-2 text-success">
+                        <Check className="h-4 w-4" />
+                        <span className="text-xs font-medium">Resolved</span>
+                      </div>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => markAsResolved(item.link_url)}
+                        className="text-xs"
+                      >
+                        Mark resolved
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
 
             {!loading && (data?.results?.length ?? 0) === 0 && (
               <div className="flex flex-col items-center justify-center py-12">
