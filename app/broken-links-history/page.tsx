@@ -5,7 +5,7 @@ import { Search, Trash2, CheckCircle2, AlertTriangle, Loader2 } from "lucide-rea
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import type { Domain } from "@/lib/types"
+import { createClient } from "@/lib/supabase/client"
 
 type BrokenLink = {
   id: string
@@ -18,13 +18,43 @@ type BrokenLink = {
   created_at: string
 }
 
-export function BrokenLinksHistoryPage({ domains }: { domains: Domain[] }) {
-  const [selectedDomainId, setSelectedDomainId] = useState<string>(domains?.[0]?.id ?? "")
+type Domain = {
+  id: string
+  name: string
+  url: string
+}
+
+export default function BrokenLinksHistoryPage() {
+  const supabase = createClient()
+  const [domains, setDomains] = useState<Domain[]>([])
+  const [selectedDomainId, setSelectedDomainId] = useState<string>("")
   const [loading, setLoading] = useState(false)
   const [links, setLinks] = useState<BrokenLink[]>([])
   const [search, setSearch] = useState("")
   const [filterStatus, setFilterStatus] = useState<"all" | "active" | "resolved">("active")
   const [deleting, setDeleting] = useState<string | null>(null)
+
+  // ✅ Carregar domínios
+  useEffect(() => {
+    const fetchDomains = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data } = await supabase
+        .from("domains")
+        .select("id, name, url")
+        .eq("user_id", user.id)
+
+      if (data) {
+        setDomains(data)
+        if (data.length > 0) {
+          setSelectedDomainId(data[0].id)
+        }
+      }
+    }
+
+    fetchDomains()
+  }, [])
 
   // ✅ Carregar broken links
   useEffect(() => {
