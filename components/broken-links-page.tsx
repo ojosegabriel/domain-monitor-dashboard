@@ -98,7 +98,6 @@ export function BrokenLinksPage({ domains }: { domains: Domain[] }) {
       })
 
       if (res.ok) {
-        // Criar uma chave única para essa ocorrência específica
         const uniqueKey = `${pageUrl}|${linkUrl}`
         setResolvedLinks(new Set(resolvedLinks).add(uniqueKey))
       }
@@ -290,7 +289,7 @@ export function BrokenLinksPage({ domains }: { domains: Domain[] }) {
                       href={item.page_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="truncate text-sm text-muted-foreground hover:underline"
+                      className="text-sm text-muted-foreground hover:underline break-all"
                       title={item.page_url}
                     >
                       {item.page_url}
