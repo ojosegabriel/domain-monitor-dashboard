@@ -16,7 +16,7 @@ export function NotificationBell({ userId }: NotificationBellProps) {
   const router = useRouter()
 
   useEffect(() => {
-    // Buscar alertas não lidos
+    
     const fetchUnreadAlerts = async () => {
       try {
         const { data, error } = await supabase
@@ -38,7 +38,7 @@ export function NotificationBell({ userId }: NotificationBellProps) {
 
     fetchUnreadAlerts()
 
-    // Subscribe para atualizações em tempo real
+    
     const subscription = supabase
       .channel(`alerts-${userId}`)
       .on(
@@ -50,7 +50,7 @@ export function NotificationBell({ userId }: NotificationBellProps) {
           filter: `user_id=eq.${userId}`,
         },
         () => {
-          // Recarregar contagem quando houver mudanças
+          
           fetchUnreadAlerts()
         }
       )

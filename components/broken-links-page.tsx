@@ -43,6 +43,7 @@ export function BrokenLinksPage({ domains }: { domains: Domain[] }) {
   const [search, setSearch] = useState("")
   const [resolvedLinks, setResolvedLinks] = useState<Set<string>>(new Set())
 
+  // Filtro dinâmico para buscar links na lista retornada pelo crawler
   const filtered = useMemo(() => {
     const items = data?.results ?? []
     const q = search.trim().toLowerCase()
@@ -98,6 +99,7 @@ export function BrokenLinksPage({ domains }: { domains: Domain[] }) {
       })
 
       if (res.ok) {
+        // Concatenamos a página e o link para criar uma chave única de resolução no front
         const uniqueKey = `${pageUrl}|${linkUrl}`
         setResolvedLinks(new Set(resolvedLinks).add(uniqueKey))
       }
@@ -117,7 +119,6 @@ export function BrokenLinksPage({ domains }: { domains: Domain[] }) {
         </p>
       </div>
 
-      {/* Controls */}
       <Card className="border-border shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-lg font-semibold text-foreground">Configurações de Escaneamento</CardTitle>
@@ -188,7 +189,6 @@ export function BrokenLinksPage({ domains }: { domains: Domain[] }) {
         </CardContent>
       </Card>
 
-      {/* Summary */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card className="border-border shadow-sm">
           <CardContent className="pt-6">
@@ -216,7 +216,6 @@ export function BrokenLinksPage({ domains }: { domains: Domain[] }) {
         </Card>
       </div>
 
-      {/* Errors */}
       {error && (
         <Card className="border-border shadow-sm">
           <CardContent className="pt-6">
@@ -231,7 +230,6 @@ export function BrokenLinksPage({ domains }: { domains: Domain[] }) {
         </Card>
       )}
 
-      {/* Results */}
       <Card className="border-border shadow-sm">
         <CardHeader className="pb-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -303,11 +301,7 @@ export function BrokenLinksPage({ domains }: { domains: Domain[] }) {
                   </div>
 
                   <div className="col-span-2 flex items-center gap-2">
-                    {item.status_code ? (
-                      <AlertTriangle className="h-4 w-4 text-destructive" />
-                    ) : (
-                      <AlertTriangle className="h-4 w-4 text-destructive" />
-                    )}
+                    <AlertTriangle className="h-4 w-4 text-destructive" />
                     <span className="text-sm text-muted-foreground">
                       {item.server_response}
                     </span>

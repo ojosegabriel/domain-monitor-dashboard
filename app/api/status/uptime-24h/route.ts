@@ -10,10 +10,9 @@ export async function GET() {
   }
 
   try {
-    // Pegar o timestamp de 24 horas atrás
+    // pegar logs só das últimas 24h
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-    // Buscar todos os logs das últimas 24 horas para o usuário
     const { data: logs, error } = await supabase
       .from("uptime_logs")
       .select("status, checked_at")
@@ -23,17 +22,17 @@ export async function GET() {
 
     if (error) throw error;
 
-    // Inicializar as 24 horas com 100% de uptime (se não houver dados)
     const stats: Record<string, { total: number; online: number }> = {};
     const now = new Date();
     
+    // cria as 24h mesmo se não tiver dado (senão o gráfico quebra)
     for (let i = 23; i >= 0; i--) {
       const d = new Date(now.getTime() - i * 60 * 60 * 1000);
       const hourKey = `${String(d.getHours()).padStart(2, "0")}:00`;
       stats[hourKey] = { total: 0, online: 0 };
     }
 
-    // Agrupar logs por hora
+    // agrupa os logs por hora
     logs?.forEach((log) => {
       const date = new Date(log.checked_at);
       const hourKey = `${String(date.getHours()).padStart(2, "0")}:00`;
@@ -46,10 +45,12 @@ export async function GET() {
       }
     });
 
-    // Formatar para o gráfico
+    // monta no formato que o gráfico usa
     const chartData = Object.entries(stats).map(([hour, data]) => ({
       hour,
-      uptime: data.total > 0 ? parseFloat(((data.online / data.total) * 100).toFixed(1)) : 100,
+      uptime: data.total > 0
+        ? parseFloat(((data.online / data.total) * 100).toFixed(1))
+        : 100,
     }));
 
     return NextResponse.json(chartData);

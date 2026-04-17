@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description: 'Professional SaaS uptime monitoring dashboard for your domains',
 }
 
-// Arquivo: app/layout.tsx
+
 
 export default function RootLayout({
   children,
@@ -21,7 +21,7 @@ export default function RootLayout({
     <html lang="pt-BR">
       <body 
         className={`${inter.variable} font-sans antialiased`}
-        suppressHydrationWarning // Adicione esta linha aqui
+        suppressHydrationWarning 
       >
         {children}
       </body>

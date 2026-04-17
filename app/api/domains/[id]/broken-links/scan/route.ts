@@ -38,6 +38,7 @@ function sameHost(a: string, b: string) {
   }
 }
 
+// faz o fetch da página com timeout
 async function fetchText(url: string, ms = 10000) {
   const ctrl = new AbortController()
   const t = setTimeout(() => ctrl.abort(), ms)
@@ -60,6 +61,7 @@ async function fetchText(url: string, ms = 10000) {
   }
 }
 
+// tenta HEAD primeiro, se não der usa GET
 async function checkUrl(url: string, ms = 8000) {
   const ctrl = new AbortController()
   const t = setTimeout(() => ctrl.abort(), ms)
@@ -119,7 +121,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   const startUrl = normalizeUrl(domain.url)
 
-  // ✅ Criar registro de scan
+  // cria o scan no banco
   const { data: scan, error: scanError } = await supabase
     .from("broken_link_scans")
     .insert({
@@ -137,7 +139,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     return NextResponse.json({ error: "Failed to create scan" }, { status: 500 })
   }
 
-  // ✅ Buscar páginas já verificadas (para não rescanear)
+  // páginas já varridas (evita repetir trabalho)
   const { data: scannedPages } = await supabase
     .from("scanned_pages")
     .select("page_url")
@@ -146,7 +148,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   const alreadyScanned = new Set((scannedPages || []).map(p => p.page_url))
 
-  // ✅ Buscar cache de links já verificados
+  // cache de links já verificados
   const { data: cachedLinks } = await supabase
     .from("broken_links")
     .select("link_url, status_code, error")
@@ -180,13 +182,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const linksToCheck: Array<{ link_url: string; link_text: string | null; page_url: string }> = []
   const pagesToRecord: string[] = []
 
-  // ✅ Fase 1: Crawl das páginas
+  // crawl das páginas
   while (queue.length && pagesScanned < maxPages) {
     const pageUrl = queue.shift()!
     if (seenPages.has(pageUrl)) continue
     seenPages.add(pageUrl)
 
-    // ✅ Pular páginas já verificadas
     if (alreadyScanned.has(pageUrl)) {
       skippedPages++
       continue
@@ -200,7 +201,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
     const $ = cheerio.load(pageRes.text)
 
-    // Descobrir novas páginas internas
+    // pega links internos pra continuar o crawl
     $("a[href]").each((_, el) => {
       const href = ($(el).attr("href") || "").trim()
       if (isSkippable(href)) return
@@ -214,7 +215,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       }
     })
 
-    // Coletar links para checar
+    // junta tudo que vai precisar checar depois
     const found: Array<{ link_url: string; link_text: string | null }> = []
 
     $("a[href]").each((_, el) => {
@@ -261,7 +262,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     }
   }
 
-  // ✅ Fase 2: Verificar links com paralelização
+  // checagem dos links (em batches)
   const CONCURRENT_CHECKS = 5
   const occurrencesToInsert: any[] = []
   const linksToInsert: any[] = []
@@ -273,6 +274,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       batch.map(async (item) => {
         linksChecked++
 
+        // usa cache se já tiver
         if (linkCache.has(item.link_url)) {
           const cached = linkCache.get(item.link_url)!
           cacheHits++
@@ -340,7 +342,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     }
   }
 
-  // ✅ Inserir links no cache
+  // salva cache de links
   if (linksToInsert.length > 0) {
     const { error: insertError } = await supabase
       .from("broken_links")
@@ -351,7 +353,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     }
   }
 
-  // ✅ Inserir ocorrências
+  // salva ocorrências de links quebrados
   if (occurrencesToInsert.length > 0) {
     const { error: occurrenceInsertError } = await supabase
       .from("broken_link_occurrences")
@@ -362,7 +364,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     }
   }
 
-  // ✅ Registrar páginas verificadas
+  // salva páginas que já foram escaneadas
   if (pagesToRecord.length > 0) {
     const pagesToInsert = pagesToRecord.map(page_url => ({
       domain_id: domainId,
@@ -379,7 +381,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     }
   }
 
-  // ✅ Atualizar status do scan
+  // finaliza o scan
   await supabase
     .from("broken_link_scans")
     .update({

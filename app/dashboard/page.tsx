@@ -22,7 +22,6 @@ export default async function DashboardRoute() {
     .eq("user_id", user.id)
     .order("created_at", { ascending: false })
 
-  // ✅ CORRIGIDO: Filtrar apenas alertas não lidos e não deletados
   const { data: alerts } = await supabase
     .from("alerts")
     .select("*, domains(name, url)")

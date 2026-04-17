@@ -10,9 +10,9 @@ export default function SignUpSuccessPage() {
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
             <Mail className="h-8 w-8 text-primary" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground">Check your email</h1>
+          <h1 className="text-2xl font-bold text-foreground">Cheque seu email</h1>
           <p className="text-sm leading-relaxed text-muted-foreground">
-            We sent a confirmation link to your email address. Click the link to activate your account and start monitoring your domains.
+            Enviamos um link de confirmação para o seu endereço de email. Clique no link para ativar sua conta e começar a monitorar seus domínios.
           </p>
           <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
             <Activity className="h-4 w-4 text-primary" />
@@ -22,7 +22,7 @@ export default function SignUpSuccessPage() {
             href="/auth/login"
             className="mt-2 text-sm font-medium text-primary hover:underline"
           >
-            Back to Sign In
+            Voltar para Login
           </Link>
         </CardContent>
       </Card>

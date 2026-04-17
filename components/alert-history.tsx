@@ -21,7 +21,7 @@ function formatDate(isoString: string) {
   })
 }
 
-// Função para mapear alert_type para badge e ícone
+// Função para mapear tipos de alerta para rótulos, cores e ícones
 function getAlertTypeInfo(alertType: string) {
   switch (alertType) {
     case "offline":
@@ -91,7 +91,7 @@ export function AlertHistory({ alerts: initialAlerts }: AlertHistoryProps) {
 
       console.log("✅ Sucesso ao marcar como lido:", data)
       
-      // Remover do estado local
+      // Tirar do estado local
       setAlerts(alerts.filter(a => a.id !== alertId))
     } catch (err) {
       console.error("❌ Erro ao marcar como lido:", err)
@@ -129,7 +129,7 @@ export function AlertHistory({ alerts: initialAlerts }: AlertHistoryProps) {
 
       console.log("✅ Sucesso ao deletar alerta:", data)
       
-      // Remover do estado local
+      // tirar do estado local
       setAlerts(alerts.filter(a => a.id !== alertId))
     } catch (err) {
       console.error("❌ Erro ao deletar alerta:", err)

@@ -22,7 +22,7 @@ export interface Alert {
   user_id: string
   domain_id: string
   alert_type: "offline" | "online" | "ssl_expiry" | "down" | "up" | "slow"
-  type?: "down" | "up" | "slow" // Para compatibilidade com código antigo
+  type?: "down" | "up" | "slow" 
   message: string
   created_at: string
   domains?: {

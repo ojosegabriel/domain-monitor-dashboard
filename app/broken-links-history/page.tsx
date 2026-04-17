@@ -34,7 +34,7 @@ export default function BrokenLinksHistoryPage() {
   const [filterStatus, setFilterStatus] = useState<"all" | "active" | "resolved">("active")
   const [deleting, setDeleting] = useState<string | null>(null)
 
-  // ✅ Carregar domínios
+
   useEffect(() => {
     const fetchDomains = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -56,7 +56,7 @@ export default function BrokenLinksHistoryPage() {
     fetchDomains()
   }, [])
 
-  // ✅ Carregar broken links
+
   useEffect(() => {
     if (!selectedDomainId) return
 
@@ -78,7 +78,7 @@ export default function BrokenLinksHistoryPage() {
     fetchLinks()
   }, [selectedDomainId])
 
-  // ✅ Filtrar links
+  // Filtrar links com base no status e na busca
   const filtered = useMemo(() => {
     let items = links
 
@@ -89,7 +89,7 @@ export default function BrokenLinksHistoryPage() {
       items = items.filter(x => x.is_resolved)
     }
 
-    // Filtrar por busca
+    // Filtro de busca
     const q = search.trim().toLowerCase()
     if (q) {
       items = items.filter(x =>
@@ -103,7 +103,7 @@ export default function BrokenLinksHistoryPage() {
     return items
   }, [links, search, filterStatus])
 
-  // ✅ Deletar broken link
+  // Deletar broken link
   async function deleteLink(linkId: string) {
     setDeleting(linkId)
     try {
@@ -121,7 +121,6 @@ export default function BrokenLinksHistoryPage() {
     }
   }
 
-  // ✅ Marcar como resolvido
   async function markResolved(linkId: string) {
     try {
       const res = await fetch(`/api/broken-link-occurrences/${linkId}/mark-fixed`, {

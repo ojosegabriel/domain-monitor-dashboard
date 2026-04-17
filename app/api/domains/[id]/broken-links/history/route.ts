@@ -9,7 +9,6 @@ export async function GET(
     const { id: domainId } = await ctx.params
     const supabase = await createClient()
 
-    // Get the current user
     const {
       data: { user },
       error: userError,
@@ -19,7 +18,6 @@ export async function GET(
       return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 })
     }
 
-    // Fetch broken link occurrences for this domain
     const { data: links, error } = await supabase
       .from("broken_link_occurrences")
       .select("*")

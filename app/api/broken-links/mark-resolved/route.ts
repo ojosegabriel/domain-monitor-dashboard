@@ -1,4 +1,4 @@
-// app/api/broken-links/mark-resolved/route.ts
+
 
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
@@ -22,11 +22,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // ✅ Atualizar APENAS a ocorrência específica em broken_link_occurrences
+    
     const { error: occurrenceError } = await supabase
       .from("broken_link_occurrences")
       .update({
-        status_code: 200, // Marcar como resolvido
+        status_code: 200, 
         server_response: "Resolved",
       })
       .eq("domain_id", domain_id)
@@ -42,8 +42,6 @@ export async function POST(request: Request) {
       )
     }
 
-    // ✅ NÃO atualizar broken_links (cache global)
-    // Assim, se o link aparecer em outra página, ainda será considerado quebrado
 
     return NextResponse.json({ success: true })
   } catch (error) {

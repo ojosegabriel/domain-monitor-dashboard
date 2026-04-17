@@ -39,7 +39,6 @@ export function DashboardPage({ user, profile, initialDomains, initialAlerts }: 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const router = useRouter()
 
-  // Efeito para verificar o status dos domínios ao carregar
   useEffect(() => {
     if (domains.length > 0) {
       domains.forEach((domain) => {
@@ -62,6 +61,7 @@ export function DashboardPage({ user, profile, initialDomains, initialAlerts }: 
   }
 
   async function checkDomainStatus(domainId: string, url: string) {
+    // GitHub Actions vai verificar o domínio
     console.log(`Domínio ${url} será verificado pelo GitHub Actions`)
   }
 
@@ -79,7 +79,6 @@ export function DashboardPage({ user, profile, initialDomains, initialAlerts }: 
     .join("")
     .toUpperCase()
     .slice(0, 2)
-    
 
   async function handleAddDomain(name: string, url: string, checkInterval: number) {
     const supabase = createClient()
@@ -101,10 +100,7 @@ export function DashboardPage({ user, profile, initialDomains, initialAlerts }: 
         .single()
 
       if (error) {
-        console.error("Erro completo:", JSON.stringify(error, null, 2))
-        console.error("Mensagem:", error?.message)
-        console.error("Detalhes:", error?.details)
-        console.error("Hint:", error?.hint)
+        console.error("Erro na inserção do domínio:", error?.message)
         return
       }
 
@@ -160,7 +156,6 @@ export function DashboardPage({ user, profile, initialDomains, initialAlerts }: 
     router.push("/auth/login")
   }
 
-  // Função auxiliar para verificar se o SSL está expirando em breve (próximos 30 dias)
   function isSSLExpiringSoon(expiryDate: string | null): boolean {
     if (!expiryDate) return false
     const expiry = new Date(expiryDate)
@@ -169,7 +164,6 @@ export function DashboardPage({ user, profile, initialDomains, initialAlerts }: 
     return daysUntilExpiry <= 30 && daysUntilExpiry > 0
   }
 
-  // Função auxiliar para verificar se o SSL já expirou
   function isSSLExpired(expiryDate: string | null): boolean {
     if (!expiryDate) return false
     const expiry = new Date(expiryDate)
@@ -177,7 +171,6 @@ export function DashboardPage({ user, profile, initialDomains, initialAlerts }: 
     return expiry.getTime() < now.getTime()
   }
 
-  // Função auxiliar para formatar a data
   function formatDate(dateString: string | null): string {
     if (!dateString) return "N/A"
     const date = new Date(dateString)
@@ -233,7 +226,6 @@ export function DashboardPage({ user, profile, initialDomains, initialAlerts }: 
 
             <DomainList domains={filteredDomains} onDelete={handleDeleteDomain} onEdit={openEditDomainModal} />
 
-            {/* Card de SSL - Exibido se houver domínios com informações de SSL */}
             {selectedDomain && selectedDomain.ssl_expiry_date && (
               <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
                 <div className="flex items-start justify-between">
@@ -278,13 +270,13 @@ export function DashboardPage({ user, profile, initialDomains, initialAlerts }: 
 
                 {isSSLExpired(selectedDomain.ssl_expiry_date) && (
                   <div className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-800 border border-red-200">
-                    ⚠️ Your SSL certificate has expired. Please renew it immediately to maintain secure connections.
+                    ⚠️ SSL expirado. Renove agora para manter a conexão segura.
                   </div>
                 )}
 
                 {isSSLExpiringSoon(selectedDomain.ssl_expiry_date) && (
                   <div className="mt-4 rounded-md bg-yellow-50 p-3 text-sm text-yellow-800 border border-yellow-200">
-                    ⚠️ Your SSL certificate will expire soon. Please renew it before the expiry date.
+                    ⚠️ SSL vai expirar em breve. Renove antes da data de expiração.
                   </div>
                 )}
               </div>

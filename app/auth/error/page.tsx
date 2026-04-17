@@ -12,7 +12,7 @@ export default function AuthErrorPage() {
           </div>
           <h1 className="text-2xl font-bold text-foreground">Authentication Error</h1>
           <p className="text-sm leading-relaxed text-muted-foreground">
-            Something went wrong during authentication. Please try again.
+            Um problema ocorreu durante a autenticação. Por favor, tente novamente.
           </p>
           <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
             <Activity className="h-4 w-4 text-primary" />
@@ -22,7 +22,7 @@ export default function AuthErrorPage() {
             href="/auth/login"
             className="mt-2 text-sm font-medium text-primary hover:underline"
           >
-            Back to Sign In
+            Voltar para Login
           </Link>
         </CardContent>
       </Card>

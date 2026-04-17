@@ -1,4 +1,3 @@
-// Arquivo 3: app/api/broken-link-occurrences/[id]/mark-fixed/route.ts
 
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
@@ -13,7 +12,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
   }
 
-  // ✅ Marcar como resolvido
+  
   const { error: updateError } = await supabase
     .from("broken_link_occurrences")
     .update({

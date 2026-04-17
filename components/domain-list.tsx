@@ -19,7 +19,7 @@ interface DomainListProps {
   onEdit: (domain: Domain) => void
 }
 
-// Formatação determinística para evitar hydration mismatch
+
 function formatDateSafe(isoString?: string | null) {
   if (!isoString) return "—"
   const d = new Date(isoString)
@@ -34,7 +34,7 @@ function formatDateSafe(isoString?: string | null) {
 }
 
 export function DomainList({ domains, onDelete, onEdit }: DomainListProps) {
-  // Radix (DropdownMenu) gera IDs dinâmicos: só renderizamos após montar no client
+  
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
 
