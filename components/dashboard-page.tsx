@@ -15,6 +15,7 @@ import { EditDomainModal } from "@/components/edit-domain-modal"
 import { AlertHistory } from "@/components/alert-history"
 import { SettingsPage } from "@/components/settings-page"
 import { BrokenLinksPage } from "@/components/broken-links-page"
+import BrokenLinksHistoryPage from "@/app/broken-links-history/page"
 import type { Domain, Alert, Profile, UptimeDataPoint } from "@/lib/types"
 import type { User } from "@supabase/supabase-js"
 import { uptimeChartData } from "@/lib/mock-data"
@@ -188,6 +189,9 @@ export function DashboardPage({ user, profile, initialDomains, initialAlerts }: 
       case "broken-links":
         return <BrokenLinksPage domains={domains} />
 
+      case "broken-links-history":
+        return <BrokenLinksHistoryPage />
+
       case "alerts":
         return <AlertHistory alerts={alerts} />
 
@@ -302,58 +306,62 @@ export function DashboardPage({ user, profile, initialDomains, initialAlerts }: 
       )}
 
       <div
-        className={`fixed inset-y-0 left-0 z-50 transform transition-transform lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-200 ease-in-out lg:relative lg:translate-x-0 ${
           mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <DashboardSidebar
-          activeTab={activeTab}
-          onTabChange={(tab) => {
-            setActiveTab(tab)
-            setMobileSidebarOpen(false)
-          }}
+        <DashboardSidebar 
+          activeTab={activeTab} 
+          onTabChange={setActiveTab}
           onLogout={handleLogout}
         />
       </div>
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-card px-4 lg:px-6">
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-foreground lg:hidden"
-              onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
-            >
-              {mobileSidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-              <span className="sr-only">Toggle sidebar</span>
-            </Button>
+        <div className="flex items-center justify-between border-b border-border bg-card px-4 py-3 sm:px-6 lg:hidden">
+          <h1 className="text-lg font-semibold text-foreground">UptimeGuard</h1>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+            className="text-foreground"
+          >
+            {mobileSidebarOpen ? (
+              <X className="h-5 w-5" />
+            ) : (
+              <Menu className="h-5 w-5" />
+            )}
+          </Button>
+        </div>
 
-            <span className="text-sm font-medium text-muted-foreground">
-              {activeTab === "dashboard" && "Dashboard"}
-              {activeTab === "broken-links" && "Broken Links"}
-              {activeTab === "alerts" && "Alert History"}
-              {activeTab === "settings" && "Settings"}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <span className="hidden text-sm text-muted-foreground sm:inline">{displayName}</span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-              {initials}
+        <div className="flex flex-1 flex-col overflow-y-auto">
+          <div className="flex items-center justify-between border-b border-border bg-card px-4 py-4 sm:px-6">
+            <div className="flex-1" />
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-medium text-foreground">{displayName}</span>
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+                {initials}
+              </div>
             </div>
           </div>
-        </header>
 
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">{renderContent()}</main>
+          <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
+            {renderContent()}
+          </div>
+        </div>
       </div>
 
-      <AddDomainModal open={addModalOpen} onOpenChange={setAddModalOpen} onAdd={handleAddDomain} />
+      <AddDomainModal
+        open={addModalOpen}
+        onOpenChange={setAddModalOpen}
+        onAdd={handleAddDomain}
+      />
+
       <EditDomainModal
         open={editModalOpen}
         onOpenChange={setEditModalOpen}
         domain={selectedDomain}
-        onEdit={(id, name, url, checkInterval) => handleEditDomain(id, name, url, checkInterval)}
+        onEdit={handleEditDomain}
       />
     </div>
   )
