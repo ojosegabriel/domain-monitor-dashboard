@@ -1,6 +1,6 @@
 "use client"
 
-import { Activity, LayoutDashboard, Link2Off, Bell, Settings, LogOut } from "lucide-react"
+import { Activity, LayoutDashboard, Link2Off, Bell, Settings, LogOut, History } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface DashboardSidebarProps {
@@ -12,6 +12,7 @@ interface DashboardSidebarProps {
 const navItems = [
   { id: "dashboard", label: "Home", icon: LayoutDashboard },
   { id: "broken-links", label: "Broken Links", icon: Link2Off },
+  { id: "broken-links-history", label: "Broken Links History", icon: History },
   { id: "alerts", label: "Alert History", icon: Bell },
   { id: "settings", label: "Settings", icon: Settings },
 ]
