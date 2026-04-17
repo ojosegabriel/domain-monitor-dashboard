@@ -6,11 +6,11 @@ import { createClient } from "@/lib/supabase/server"
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { domain_id, link_url } = body
+    const { domain_id, link_url, page_url } = body
 
-    if (!domain_id || !link_url) {
+    if (!domain_id || !link_url || !page_url) {
       return NextResponse.json(
-        { error: "Missing domain_id or link_url" },
+        { error: "Missing domain_id, link_url, or page_url" },
         { status: 400 }
       )
     }
@@ -22,26 +22,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Atualizar broken_links para marcar como resolvido
-    const { error: updateError } = await supabase
-      .from("broken_links")
-      .update({
-        status_code: 200, // Marcar como resolvido (status 200)
-        error: "Resolved",
-      })
-      .eq("domain_id", domain_id)
-      .eq("link_url", link_url)
-      .eq("user_id", user.id)
-
-    if (updateError) {
-      console.error("Erro ao atualizar broken_links:", updateError)
-      return NextResponse.json(
-        { error: updateError.message },
-        { status: 400 }
-      )
-    }
-
-    // Atualizar broken_link_occurrences para marcar como resolvido
+    // ✅ Atualizar APENAS a ocorrência específica em broken_link_occurrences
     const { error: occurrenceError } = await supabase
       .from("broken_link_occurrences")
       .update({
@@ -50,12 +31,19 @@ export async function POST(request: Request) {
       })
       .eq("domain_id", domain_id)
       .eq("link_url", link_url)
+      .eq("page_url", page_url)
       .eq("user_id", user.id)
 
     if (occurrenceError) {
       console.error("Erro ao atualizar broken_link_occurrences:", occurrenceError)
-      // Não retornar erro aqui, pois a atualização em broken_links já foi feita
+      return NextResponse.json(
+        { error: occurrenceError.message },
+        { status: 400 }
+      )
     }
+
+    // ✅ NÃO atualizar broken_links (cache global)
+    // Assim, se o link aparecer em outra página, ainda será considerado quebrado
 
     return NextResponse.json({ success: true })
   } catch (error) {

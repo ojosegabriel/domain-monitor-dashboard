@@ -85,7 +85,7 @@ export function BrokenLinksPage({ domains }: { domains: Domain[] }) {
     }
   }
 
-  async function markAsResolved(linkUrl: string) {
+  async function markAsResolved(linkUrl: string, pageUrl: string) {
     try {
       const res = await fetch(`/api/broken-links/mark-resolved`, {
         method: "POST",
@@ -93,11 +93,14 @@ export function BrokenLinksPage({ domains }: { domains: Domain[] }) {
         body: JSON.stringify({
           domain_id: selectedDomainId,
           link_url: linkUrl,
+          page_url: pageUrl,
         }),
       })
 
       if (res.ok) {
-        setResolvedLinks(new Set(resolvedLinks).add(linkUrl))
+        // Criar uma chave única para essa ocorrência específica
+        const uniqueKey = `${pageUrl}|${linkUrl}`
+        setResolvedLinks(new Set(resolvedLinks).add(uniqueKey))
       }
     } catch (e) {
       console.error("Erro ao marcar como resolvido:", e)
@@ -260,7 +263,8 @@ export function BrokenLinksPage({ domains }: { domains: Domain[] }) {
 
           <div className="divide-y divide-border">
             {filtered.map((item, idx) => {
-              const isResolved = resolvedLinks.has(item.link_url)
+              const uniqueKey = `${item.page_url}|${item.link_url}`
+              const isResolved = resolvedLinks.has(uniqueKey)
               return (
                 <div
                   key={`${item.page_url}-${item.link_url}-${idx}`}
@@ -320,7 +324,7 @@ export function BrokenLinksPage({ domains }: { domains: Domain[] }) {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => markAsResolved(item.link_url)}
+                        onClick={() => markAsResolved(item.link_url, item.page_url)}
                         className="text-xs"
                       >
                         Mark resolved
