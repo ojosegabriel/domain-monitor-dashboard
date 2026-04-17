@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { revalidatePath } from "next/cache"
 
 export async function PATCH(
   request: Request,
@@ -39,6 +40,11 @@ export async function PATCH(
       }
 
       console.log("✅ Alerta marcado como lido")
+      
+      // Revalidar o cache do dashboard
+      revalidatePath("/dashboard")
+      console.log("🔄 Cache revalidado para /dashboard")
+      
       return NextResponse.json({ success: true, message: "Alerta marcado como lido" })
     } else if (action === "delete") {
       // Soft delete
@@ -54,6 +60,11 @@ export async function PATCH(
       }
 
       console.log("✅ Alerta deletado")
+      
+      // Revalidar o cache do dashboard
+      revalidatePath("/dashboard")
+      console.log("🔄 Cache revalidado para /dashboard")
+      
       return NextResponse.json({ success: true, message: "Alerta deletado" })
     } else {
       return NextResponse.json({ error: "Ação inválida" }, { status: 400 })
