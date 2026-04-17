@@ -11,10 +11,10 @@ interface DashboardSidebarProps {
 
 const navItems = [
   { id: "dashboard", label: "Home", icon: LayoutDashboard },
-  { id: "broken-links", label: "Broken Links", icon: Link2Off },
-  { id: "broken-links-history", label: "Broken Links History", icon: History },
-  { id: "alerts", label: "Alert History", icon: Bell },
-  { id: "settings", label: "Settings", icon: Settings },
+  { id: "broken-links", label: "Links Quebrados", icon: Link2Off },
+  { id: "broken-links-history", label: "Lista de links", icon: History },
+  { id: "alerts", label: "Histórico de Alertas", icon: Bell },
+  { id: "settings", label: "Configurações", icon: Settings },
 ]
 
 export function DashboardSidebar({ activeTab, onTabChange, onLogout }: DashboardSidebarProps) {
@@ -62,7 +62,7 @@ export function DashboardSidebar({ activeTab, onTabChange, onLogout }: Dashboard
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-[hsl(210,20%,60%)] transition-colors hover:bg-[hsl(215,25%,20%)] hover:text-[hsl(0,0%,100%)]"
         >
           <LogOut className="h-4.5 w-4.5" />
-          Logout
+          Deslogar
         </button>
       </div>
     </aside>

@@ -56,14 +56,14 @@ export function EditDomainModal({ domain, open, onOpenChange, onEdit }: EditDoma
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-foreground">Edit Domain</DialogTitle>
+          <DialogTitle className="text-foreground">Editar Dominio</DialogTitle>
           <DialogDescription>
-            Update the details for your monitored domain.
+            Atualize os detalhes para modificar o monitoramento do dominio.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="edit-domain-name" className="text-foreground">Domain Name</Label>
+            <Label htmlFor="edit-domain-name" className="text-foreground">Nome do Dominio</Label>
             <Input
               id="edit-domain-name"
               placeholder="My Website"
@@ -83,24 +83,19 @@ export function EditDomainModal({ domain, open, onOpenChange, onEdit }: EditDoma
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="edit-check-interval" className="text-foreground">Check Interval</Label>
+            <Label htmlFor="edit-check-interval" className="text-foreground">Intervalo</Label>
             <Select value={interval} onValueChange={setInterval}>
               <SelectTrigger id="edit-check-interval">
                 <SelectValue placeholder="Select interval" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="1">Every 1 minute</SelectItem>
-                <SelectItem value="3">Every 3 minutes</SelectItem>
-                <SelectItem value="5">Every 5 minutes</SelectItem>
-                <SelectItem value="10">Every 10 minutes</SelectItem>
-                <SelectItem value="15">Every 15 minutes</SelectItem>
-                <SelectItem value="30">Every 30 minutes</SelectItem>
+                <SelectItem value="1">A cada 1 minuto</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <DialogFooter className="gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="text-foreground">
-              Cancel
+              Cancelar
             </Button>
             <Button type="submit" className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={loading}>
               {loading ? "Saving..." : "Save Changes"}

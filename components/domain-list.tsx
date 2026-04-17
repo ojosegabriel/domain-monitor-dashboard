@@ -42,7 +42,7 @@ export function DomainList({ domains, onDelete, onEdit }: DomainListProps) {
     return (
       <Card className="border-border shadow-sm">
         <CardHeader className="pb-3">
-          <CardTitle className="text-lg font-semibold text-foreground">Monitored Domains</CardTitle>
+          <CardTitle className="text-lg font-semibold text-foreground">Dominios Monitorados</CardTitle>
         </CardHeader>
         <CardContent className="px-6 pb-6">
           <p className="text-sm text-muted-foreground">Loading...</p>
@@ -54,17 +54,17 @@ export function DomainList({ domains, onDelete, onEdit }: DomainListProps) {
   return (
     <Card className="border-border shadow-sm">
       <CardHeader className="pb-3">
-        <CardTitle className="text-lg font-semibold text-foreground">Monitored Domains</CardTitle>
+        <CardTitle className="text-lg font-semibold text-foreground">Dominios Monitorados</CardTitle>
       </CardHeader>
       <CardContent className="px-0 pb-0">
         {/* Table header */}
         <div className="hidden border-b border-border px-6 pb-3 md:grid md:grid-cols-12 md:gap-4">
-          <p className="col-span-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">Domain</p>
+          <p className="col-span-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">Dominio</p>
           <p className="col-span-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">URL</p>
           <p className="col-span-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">Status</p>
           <p className="col-span-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Uptime</p>
-          <p className="col-span-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Last Check</p>
-          <p className="col-span-1 text-xs font-medium uppercase tracking-wider text-muted-foreground sr-only">Actions</p>
+          <p className="col-span-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Última Verificação</p>
+          <p className="col-span-1 text-xs font-medium uppercase tracking-wider text-muted-foreground sr-only">Ações</p>
         </div>
 
         {/* Table rows */}
@@ -142,14 +142,14 @@ export function DomainList({ domains, onDelete, onEdit }: DomainListProps) {
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem className="gap-2" onClick={() => onEdit(domain)}>
                       <Pencil className="h-4 w-4" />
-                      Edit
+                      Editar
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       className="gap-2 text-destructive"
                       onClick={() => onDelete(domain.id)}
                     >
                       <Trash2 className="h-4 w-4" />
-                      Delete
+                      Deletar
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>

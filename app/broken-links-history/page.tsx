@@ -147,7 +147,7 @@ export default function BrokenLinksHistoryPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">Broken Links History</h2>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">Broken Links Histórico</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Visualize todos os broken links encontrados e marque como resolvido.
         </p>
@@ -189,11 +189,11 @@ export default function BrokenLinksHistoryPage() {
           </div>
 
           <div className="md:col-span-4">
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">Search</label>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Pesquisar</label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search broken links..."
+                placeholder="Pesquisar links quebrados..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-10"
@@ -207,19 +207,19 @@ export default function BrokenLinksHistoryPage() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="border-border shadow-sm">
           <CardContent className="pt-6">
-            <div className="text-xs text-muted-foreground">Total Broken Links</div>
+            <div className="text-xs text-muted-foreground">Total de links quebrados</div>
             <div className="mt-1 text-2xl font-bold">{links.length}</div>
           </CardContent>
         </Card>
         <Card className="border-border shadow-sm">
           <CardContent className="pt-6">
-            <div className="text-xs text-muted-foreground">Active</div>
+            <div className="text-xs text-muted-foreground">Ativos</div>
             <div className="mt-1 text-2xl font-bold text-destructive">{activeCount}</div>
           </CardContent>
         </Card>
         <Card className="border-border shadow-sm">
           <CardContent className="pt-6">
-            <div className="text-xs text-muted-foreground">Resolved</div>
+            <div className="text-xs text-muted-foreground">Resolvidos</div>
             <div className="mt-1 text-2xl font-bold text-success">{resolvedCount}</div>
           </CardContent>
         </Card>
@@ -235,11 +235,11 @@ export default function BrokenLinksHistoryPage() {
 
         <CardContent className="px-0 pb-0">
           <div className="hidden border-b border-border px-6 pb-3 md:grid md:grid-cols-12 md:gap-4">
-            <p className="col-span-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">Link</p>
-            <p className="col-span-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">Found on</p>
-            <p className="col-span-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Response</p>
+            <p className="col-span-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">Link quebrado</p>
+            <p className="col-span-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">Encontrado na página</p>
+            <p className="col-span-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Resposta</p>
             <p className="col-span-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Status</p>
-            <p className="col-span-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Actions</p>
+            <p className="col-span-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Ações</p>
           </div>
 
           <div className="divide-y divide-border">
@@ -250,7 +250,7 @@ export default function BrokenLinksHistoryPage() {
             ) : filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12">
                 <CheckCircle2 className="h-5 w-5 text-success" />
-                <span className="mt-2 font-semibold text-foreground">No broken links found</span>
+                <span className="mt-2 font-semibold text-foreground">Nenhum link quebrado encontrado</span>
               </div>
             ) : (
               filtered.map((item) => (

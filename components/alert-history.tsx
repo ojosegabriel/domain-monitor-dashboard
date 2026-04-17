@@ -142,20 +142,20 @@ export function AlertHistory({ alerts: initialAlerts }: AlertHistoryProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">Alert History</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Review recent alerts and incidents for your monitored domains.</p>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">Histórico de Alertas</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Veja os alertas recentes e incidentes para seus domínios monitorados.</p>
       </div>
       <Card className="border-border shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-lg font-semibold text-foreground">
-            Recent Alerts ({alerts.length})
+            Ultimos Alertas({alerts.length})
           </CardTitle>
         </CardHeader>
         <CardContent className="px-0 pb-0">
           {alerts.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12">
               <CheckCircle2 className="mb-3 h-8 w-8 text-success" />
-              <p className="text-sm text-muted-foreground">No alerts yet. All domains are looking good!</p>
+              <p className="text-sm text-muted-foreground">Nenhum alerta recente! todos os domínios estão funcionando corretamente.</p>
             </div>
           ) : (
             <div className="divide-y divide-border">

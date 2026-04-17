@@ -205,7 +205,7 @@ export function DashboardPage({ user, profile, initialDomains, initialAlerts }: 
             <div>
               <h2 className="text-2xl font-bold tracking-tight text-foreground">Dashboard</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Overview of all your monitored domains and their status.
+                Visualização de todos seus dominios monitorados e seus status.
               </p>
             </div>
 
@@ -215,7 +215,7 @@ export function DashboardPage({ user, profile, initialDomains, initialAlerts }: 
               <div className="relative max-w-sm flex-1">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Search domains..."
+                  placeholder="Pesquisar domínios..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
@@ -227,7 +227,7 @@ export function DashboardPage({ user, profile, initialDomains, initialAlerts }: 
                 className="bg-primary text-primary-foreground hover:bg-primary/90"
               >
                 <Plus className="mr-2 h-4 w-4" />
-                Add Domain
+                Add Dominio
               </Button>
             </div>
 

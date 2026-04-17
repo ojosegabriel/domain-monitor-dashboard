@@ -18,7 +18,7 @@ export function SummaryCards({ domains }: SummaryCardsProps) {
 
   const cards = [
     {
-      title: "Total Domains",
+      title: "Total Dominios",
       value: totalDomains,
       icon: Globe,
       iconBg: "bg-primary/10",

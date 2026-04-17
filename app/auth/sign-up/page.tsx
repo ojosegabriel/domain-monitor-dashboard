@@ -61,14 +61,14 @@ export default function SignUpPage() {
           </div>
           <div className="space-y-6">
             <h2 className="text-balance text-3xl font-bold leading-tight">
-              Start monitoring in under 2 minutes.
+              Monitore em 2 minutos.
             </h2>
             <p className="text-pretty text-base leading-relaxed text-[hsl(210,20%,70%)]">
-              Create your free account and add your first domain. We will start checking its status immediately.
+              Crie sua conta gratuita e adicione seu primeiro domínio. Vamos começar a verificar seu status imediatamente.
             </p>
           </div>
           <p className="text-sm text-[hsl(210,20%,50%)]">
-            UptimeGuard 2026. All rights reserved.
+            Projeto criado e desenvolvido para Gnomodigital
           </p>
         </div>
 
@@ -79,11 +79,11 @@ export default function SignUpPage() {
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
                 <Activity className="h-4 w-4 text-primary-foreground" />
               </div>
-              <span className="text-lg font-bold tracking-tight text-foreground">UptimeGuard</span>
+              <span className="text-lg font-bold tracking-tight text-foreground">GNM Hub</span>
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Create Account</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Crie sua conta</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Fill in the details below to get started
+              Preencha os detalhes abaixo para começar
             </p>
           </CardHeader>
           <CardContent className="px-8 pb-10 pt-4 md:px-12">
@@ -95,14 +95,14 @@ export default function SignUpPage() {
               )}
               <div className="space-y-2">
                 <Label htmlFor="fullName" className="text-sm font-medium text-foreground">
-                  Full Name
+                  Nome completo
                 </Label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     id="fullName"
                     type="text"
-                    placeholder="John Doe"
+                    placeholder="João Silva"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     className="pl-10"
@@ -119,7 +119,7 @@ export default function SignUpPage() {
                   <Input
                     id="email"
                     type="email"
-                    placeholder="you@example.com"
+                    placeholder="email@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-10"
@@ -129,14 +129,14 @@ export default function SignUpPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password" className="text-sm font-medium text-foreground">
-                  Password
+                  Senha
                 </Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     id="password"
                     type="password"
-                    placeholder="Min. 6 characters"
+                    placeholder="Mín. 6 caracteres"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-10"
@@ -151,14 +151,14 @@ export default function SignUpPage() {
                 size="lg"
                 disabled={loading}
               >
-                {loading ? "Creating account..." : "Create Account"}
+                {loading ? "Creating account..." : "Criar Conta"}
                 {!loading && <ArrowRight className="ml-2 h-4 w-4" />}
               </Button>
             </form>
             <p className="mt-6 text-center text-sm text-muted-foreground">
-              Already have an account?{" "}
+              Já tem uma conta?{" "}
               <Link href="/auth/login" className="font-medium text-primary hover:underline">
-                Sign in
+                Entrar
               </Link>
             </p>
           </CardContent>

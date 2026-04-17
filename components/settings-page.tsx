@@ -48,48 +48,48 @@ export function SettingsPage({ profile }: SettingsPageProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Settings</h1>
-        <p className="text-muted-foreground">Manage your account settings and notification preferences.</p>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Configurações</h1>
+        <p className="text-muted-foreground">Gerencie suas configurações de conta e preferências de notificação.</p>
       </div>
 
       <Tabs defaultValue="profile" className="space-y-4">
         <TabsList>
           <TabsTrigger value="profile" className="gap-2">
             <User className="h-4 w-4" />
-            Profile
+            Perfil
           </TabsTrigger>
           <TabsTrigger value="notifications" className="gap-2">
             <Bell className="h-4 w-4" />
-            Notifications
+            Notificações
           </TabsTrigger>
           <TabsTrigger value="security" className="gap-2">
             <Lock className="h-4 w-4" />
-            Security
+            Segurança
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Profile Information</CardTitle>
-              <CardDescription>Update your personal details here.</CardDescription>
+              <CardTitle>Informações do Perfil</CardTitle>
+              <CardDescription>Atualize seus dados pessoais aqui.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Full Name</Label>
+                <Label htmlFor="name">Nome Completo</Label>
                 <Input
                   id="name"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Your full name"
+                  placeholder="Seu nome completo"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="email">Email Address</Label>
+                <Label htmlFor="email">Endereço de Email</Label>
                 <Input id="email" value={profile?.email} disabled className="bg-muted" />
               </div>
               <Button onClick={handleUpdateProfile} disabled={loading}>
-                {loading ? "Saving..." : "Save Changes"}
+                {loading ? "Saving..." : "Salvar Alterações"}
               </Button>
             </CardContent>
           </Card>
@@ -155,11 +155,11 @@ export function SettingsPage({ profile }: SettingsPageProps) {
 
           <Card>
             <CardHeader>
-              <CardTitle>Twilio Configuration</CardTitle>
-              <CardDescription>Configure Twilio settings for WhatsApp integration.</CardDescription>
+              <CardTitle>Configuração Do Twilio</CardTitle>
+              <CardDescription>As configurações acima são essenciais, para garantir o funcionamento das notificações através do Whatsapp!</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground">Configurar credenciais adicionais do Twilio se necessário.</p>
+              <p className="text-sm text-muted-foreground">SEM AS CONFIGURAÇÕES CORRETAS, AS NOTIFICAÇÕES VIA WHATSAPP NÃO FUNCIONARÃO!</p>
             </CardContent>
           </Card>
         </TabsContent>
@@ -167,23 +167,23 @@ export function SettingsPage({ profile }: SettingsPageProps) {
         <TabsContent value="security" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Password Security</CardTitle>
-              <CardDescription>Change your password to keep your account secure.</CardDescription>
+              <CardTitle>Segurança da Senha</CardTitle>
+              <CardDescription>Mude sua senha para manter sua conta segura.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="current">Current Password</Label>
-                <Input id="current" type="password" placeholder="Current..." />
+                <Label htmlFor="current">Senha Atual</Label>
+                <Input id="current" type="password" placeholder="Senha atual..." />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="new">New Password</Label>
-                <Input id="new" type="password" placeholder="New..." />
+                <Label htmlFor="new">Nova Senha</Label>
+                <Input id="new" type="password" placeholder="Nova senha..." />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="confirm">Confirm Password</Label>
-                <Input id="confirm" type="password" placeholder="Confirm..." />
+                <Label htmlFor="confirm">Confirmar Senha</Label>
+                <Input id="confirm" type="password" placeholder="Confirme a senha..." />
               </div>
-              <Button variant="outline">Update Password</Button>
+              <Button variant="outline">Atualizar Senha</Button>
             </CardContent>
           </Card>
         </TabsContent>

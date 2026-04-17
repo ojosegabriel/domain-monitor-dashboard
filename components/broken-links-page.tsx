@@ -120,11 +120,11 @@ export function BrokenLinksPage({ domains }: { domains: Domain[] }) {
       {/* Controls */}
       <Card className="border-border shadow-sm">
         <CardHeader className="pb-3">
-          <CardTitle className="text-lg font-semibold text-foreground">Scan settings</CardTitle>
+          <CardTitle className="text-lg font-semibold text-foreground">Configurações de Escaneamento</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-12">
           <div className="md:col-span-4">
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">Domain</label>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Dominio</label>
             <select
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
               value={selectedDomainId}
@@ -140,19 +140,19 @@ export function BrokenLinksPage({ domains }: { domains: Domain[] }) {
           </div>
 
           <div className="md:col-span-3">
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">Mode</label>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Modo</label>
             <select
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
               value={mode}
               onChange={(e) => setMode(e.target.value as ScanMode)}
             >
-              <option value="distinct">Distinct (unique links)</option>
-              <option value="all">All occurrences</option>
+              <option value="distinct">Distintos (links únicos)</option>
+              <option value="all">Todas as ocorrências</option>
             </select>
           </div>
 
           <div className="md:col-span-2">
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">Max pages</label>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Max páginas</label>
             <Input
               type="number"
               value={maxPages}
@@ -161,7 +161,7 @@ export function BrokenLinksPage({ domains }: { domains: Domain[] }) {
           </div>
 
           <div className="md:col-span-2">
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">Max links/page</label>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Max links/páginas</label>
             <Input
               type="number"
               value={maxLinks}
@@ -178,10 +178,10 @@ export function BrokenLinksPage({ domains }: { domains: Domain[] }) {
               {loading ? (
                 <span className="flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Scanning
+                  Escaneando...
                 </span>
               ) : (
-                "Scan"
+                "Escanear"
               )}
             </Button>
           </div>
@@ -192,25 +192,25 @@ export function BrokenLinksPage({ domains }: { domains: Domain[] }) {
       <div className="grid gap-4 md:grid-cols-4">
         <Card className="border-border shadow-sm">
           <CardContent className="pt-6">
-            <div className="text-xs text-muted-foreground">Pages scanned</div>
+            <div className="text-xs text-muted-foreground">Páginas escaneadas</div>
             <div className="mt-1 text-2xl font-bold">{data?.pagesScanned ?? "—"}</div>
           </CardContent>
         </Card>
         <Card className="border-border shadow-sm">
           <CardContent className="pt-6">
-            <div className="text-xs text-muted-foreground">Links checked</div>
+            <div className="text-xs text-muted-foreground">Links encontrados</div>
             <div className="mt-1 text-2xl font-bold">{data?.linksChecked ?? "—"}</div>
           </CardContent>
         </Card>
         <Card className="border-border shadow-sm">
           <CardContent className="pt-6">
-            <div className="text-xs text-muted-foreground">Broken found</div>
+            <div className="text-xs text-muted-foreground">Links quebrados</div>
             <div className="mt-1 text-2xl font-bold">{data?.brokenFound ?? "—"}</div>
           </CardContent>
         </Card>
         <Card className="border-border shadow-sm">
           <CardContent className="pt-6">
-            <div className="text-xs text-muted-foreground">Start URL</div>
+            <div className="text-xs text-muted-foreground">Url inicial</div>
             <div className="mt-1 truncate text-sm text-foreground">{data?.startUrl ?? "—"}</div>
           </CardContent>
         </Card>
@@ -223,7 +223,7 @@ export function BrokenLinksPage({ domains }: { domains: Domain[] }) {
             <div className="flex items-start gap-3 text-destructive">
               <AlertTriangle className="h-5 w-5" />
               <div>
-                <div className="font-semibold">Scan failed</div>
+                <div className="font-semibold">Escaneamento falhou</div>
                 <div className="text-sm opacity-90">{error}</div>
               </div>
             </div>
@@ -236,13 +236,13 @@ export function BrokenLinksPage({ domains }: { domains: Domain[] }) {
         <CardHeader className="pb-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="text-lg font-semibold text-foreground">
-              Broken links list
+              Lista de links quebrados
             </CardTitle>
 
             <div className="relative max-w-sm flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search broken links..."
+                placeholder="Pesquisar links quebrados..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-10"
@@ -253,11 +253,11 @@ export function BrokenLinksPage({ domains }: { domains: Domain[] }) {
 
         <CardContent className="px-0 pb-0">
           <div className="hidden border-b border-border px-6 pb-3 md:grid md:grid-cols-12 md:gap-4">
-            <p className="col-span-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">Broken link</p>
-            <p className="col-span-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">Found on page</p>
-            <p className="col-span-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Link text</p>
-            <p className="col-span-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Response</p>
-            <p className="col-span-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Action</p>
+            <p className="col-span-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">Link quebrado</p>
+            <p className="col-span-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">Encontrado na página</p>
+            <p className="col-span-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Texto do link</p>
+            <p className="col-span-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Resposta</p>
+            <p className="col-span-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Ação</p>
           </div>
 
           <div className="divide-y divide-border">
@@ -338,7 +338,7 @@ export function BrokenLinksPage({ domains }: { domains: Domain[] }) {
               <div className="flex flex-col items-center justify-center py-12">
                 <div className="flex items-center gap-2 text-foreground">
                   <CheckCircle2 className="h-5 w-5 text-success" />
-                  <span className="font-semibold">No broken links found (in preview)</span>
+                  <span className="font-semibold">Nenhum link quebrado encontrado (na pré-visualização)</span>
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">
                   Rode um scan para ver resultados aqui.

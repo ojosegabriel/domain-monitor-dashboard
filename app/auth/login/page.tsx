@@ -52,28 +52,14 @@ export default function LoginPage() {
           </div>
           <div className="space-y-6">
             <h2 className="text-balance text-3xl font-bold leading-tight">
-              Monitor your domains with confidence.
+              Monitore seus domínios com confiança.
             </h2>
             <p className="text-pretty text-base leading-relaxed text-[hsl(210,20%,70%)]">
-              Real-time uptime monitoring, instant alerts, and detailed analytics for all your websites and APIs.
+              Monitore seus dominios com confiança. Monitoramento de uptime em tempo real, alertas instantâneos e análises detalhadas para todos os seus sites e APIs.
             </p>
-            <div className="flex gap-8">
-              <div>
-                <p className="text-2xl font-bold">99.9%</p>
-                <p className="text-sm text-[hsl(210,20%,60%)]">Avg. Uptime</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{"< 30s"}</p>
-                <p className="text-sm text-[hsl(210,20%,60%)]">Alert Speed</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold">24/7</p>
-                <p className="text-sm text-[hsl(210,20%,60%)]">Monitoring</p>
-              </div>
-            </div>
           </div>
           <p className="text-sm text-[hsl(210,20%,50%)]">
-            UptimeGuard 2026. All rights reserved.
+            Projeto open-source desenvolvido por {"Gabriel"}
           </p>
         </div>
 
@@ -84,11 +70,11 @@ export default function LoginPage() {
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
                 <Activity className="h-4 w-4 text-primary-foreground" />
               </div>
-              <span className="text-lg font-bold tracking-tight text-foreground">UptimeGuard</span>
+              <span className="text-lg font-bold tracking-tight text-foreground">GNM Hub</span>
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Sign In</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Login</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Enter your credentials to access the dashboard
+              Digite suas credenciais para acessar seu painel de monitoramento e gerenciar seus domínios.
             </p>
           </CardHeader>
           <CardContent className="px-8 pb-10 pt-4 md:px-12">
@@ -107,7 +93,7 @@ export default function LoginPage() {
                   <Input
                     id="email"
                     type="email"
-                    placeholder="you@example.com"
+                    placeholder="email@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-10"
@@ -117,14 +103,14 @@ export default function LoginPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password" className="text-sm font-medium text-foreground">
-                  Password
+                  Senha
                 </Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     id="password"
                     type="password"
-                    placeholder="Enter your password"
+                    placeholder="Digite sua senha"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-10"
@@ -143,9 +129,9 @@ export default function LoginPage() {
               </Button>
             </form>
             <p className="mt-6 text-center text-sm text-muted-foreground">
-              {"Don't have an account? "}
+              {"Não tem uma conta? "}
               <Link href="/auth/sign-up" className="font-medium text-primary hover:underline">
-                Sign up
+                Cadastre-se
               </Link>
             </p>
           </CardContent>
