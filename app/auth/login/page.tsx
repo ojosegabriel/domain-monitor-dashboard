@@ -59,7 +59,7 @@ export default function LoginPage() {
             </p>
           </div>
           <p className="text-sm text-[hsl(210,20%,50%)]">
-            Projeto open-source desenvolvido por {"Gabriel"}
+            Projeto criado e desenvolvido para Gnomodigital
           </p>
         </div>
 
