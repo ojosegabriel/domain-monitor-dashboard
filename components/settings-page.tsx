@@ -21,7 +21,7 @@ export function SettingsPage({ profile }: SettingsPageProps) {
   const [twilioSid, setTwilioSid] = useState(profile?.twilio_sid || "")
   const [twilioToken, setTwilioToken] = useState(profile?.twilio_token || "")
   const [twilioFrom, setTwilioFrom] = useState(profile?.twilio_from || "")
-  
+
   const supabase = createClient()
 
   async function handleUpdateProfile() {
@@ -37,12 +37,12 @@ export function SettingsPage({ profile }: SettingsPageProps) {
       })
       .eq("id", profile.id)
 
-    setLoading(false)
-    if (error) {
-      alert("Erro ao salvar: " + error.message)
-    } else {
+    if (!error) {
       alert("Configurações salvas com sucesso!")
+    } else {
+      alert("Erro ao salvar configurações")
     }
+    setLoading(false)
   }
 
   return (
@@ -77,10 +77,11 @@ export function SettingsPage({ profile }: SettingsPageProps) {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Full Name</Label>
-                <Input 
-                  id="name" 
-                  value={fullName} 
-                  onChange={(e) => setFullName(e.target.value)} 
+                <Input
+                  id="name"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Your full name"
                 />
               </div>
               <div className="space-y-2">
@@ -97,55 +98,18 @@ export function SettingsPage({ profile }: SettingsPageProps) {
         <TabsContent value="notifications" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>WhatsApp Alerts (Twilio)</CardTitle>
-              <CardDescription>Configuração profissional de alertas via WhatsApp.</CardDescription>
+              <CardTitle>WhatsApp Notifications</CardTitle>
+              <CardDescription>Configure your WhatsApp notification settings.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="rounded-lg bg-amber-50 dark:bg-amber-950 p-4 text-sm text-amber-800 dark:text-amber-200 mb-4">
-                <p className="font-bold mb-2">Configuração Twilio Sandbox:</p>
-                <ol className="list-decimal ml-4 space-y-1">
-                  <li>Crie uma conta no <a href="https://twilio.com" target="_blank" className="underline">Twilio</a>.</li>
-                  <li>Ative o Sandbox de WhatsApp no painel deles.</li>
-                  <li>Envie o código de ativação do seu celular para o número do Twilio.</li>
-                </ol>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Account SID</Label>
-                  <Input 
-                    value={twilioSid} 
-                    onChange={(e ) => setTwilioSid(e.target.value)} 
-                    placeholder="AC..." 
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Auth Token</Label>
-                  <Input 
-                    type="password" 
-                    value={twilioToken} 
-                    onChange={(e) => setTwilioToken(e.target.value)} 
-                    placeholder="token..." 
-                  />
-                </div>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Seu Número (Destino)</Label>
-                  <Input 
-                    value={whatsappNumber} 
-                    onChange={(e) => setWhatsappNumber(e.target.value)} 
-                    placeholder="whatsapp:+55..." 
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Número Twilio (Origem)</Label>
-                  <Input 
-                    value={twilioFrom} 
-                    onChange={(e) => setTwilioFrom(e.target.value)} 
-                    placeholder="whatsapp:+1415..." 
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="whatsapp">WhatsApp Number</Label>
+                <Input
+                  id="whatsapp"
+                  value={whatsappNumber}
+                  onChange={(e) => setWhatsappNumber(e.target.value)}
+                  placeholder="Your WhatsApp number"
+                />
               </div>
               <Button onClick={handleUpdateProfile} disabled={loading}>
                 {loading ? "Saving..." : "Save Changes"}
@@ -155,17 +119,43 @@ export function SettingsPage({ profile }: SettingsPageProps) {
 
           <Card>
             <CardHeader>
-              <CardTitle>Email Notifications</CardTitle>
-              <CardDescription>Configure how you receive alerts via email.</CardDescription>
+              <CardTitle>Twilio Configuration</CardTitle>
+              <CardDescription>Configure Twilio settings for WhatsApp integration.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Uptime Alerts</Label>
-                  <p className="text-sm text-muted-foreground">Receive email when a domain goes offline.</p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="twilio-sid">Account SID</Label>
+                  <Input
+                    id="twilio-sid"
+                    value={twilioSid}
+                    onChange={(e) => setTwilioSid(e.target.value)}
+                    placeholder="AC..."
+                  />
                 </div>
-                <Switch defaultChecked />
+                <div className="space-y-2">
+                  <Label htmlFor="twilio-token">Auth Token</Label>
+                  <Input
+                    id="twilio-token"
+                    type="password"
+                    value={twilioToken}
+                    onChange={(e) => setTwilioToken(e.target.value)}
+                    placeholder="token..."
+                  />
+                </div>
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="twilio-from">Twilio From Number</Label>
+                <Input
+                  id="twilio-from"
+                  value={twilioFrom}
+                  onChange={(e) => setTwilioFrom(e.target.value)}
+                  placeholder="whatsapp:+55..."
+                />
+              </div>
+              <Button onClick={handleUpdateProfile} disabled={loading}>
+                {loading ? "Saving..." : "Save Changes"}
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
@@ -173,17 +163,21 @@ export function SettingsPage({ profile }: SettingsPageProps) {
         <TabsContent value="security" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Password</CardTitle>
+              <CardTitle>Password Security</CardTitle>
               <CardDescription>Change your password to keep your account secure.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="current">Current Password</Label>
-                <Input id="current" type="password" />
+                <Input id="current" type="password" placeholder="Current..." />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="new">New Password</Label>
-                <Input id="new" type="password" />
+                <Input id="new" type="password" placeholder="New..." />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirm">Confirm Password</Label>
+                <Input id="confirm" type="password" placeholder="Confirm..." />
               </div>
               <Button variant="outline">Update Password</Button>
             </CardContent>
@@ -193,3 +187,5 @@ export function SettingsPage({ profile }: SettingsPageProps) {
     </div>
   )
 }
+
+export default SettingsPage
