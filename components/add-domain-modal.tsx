@@ -49,14 +49,14 @@ export function AddDomainModal({ open, onOpenChange, onAdd }: AddDomainModalProp
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-foreground">Add New Domain</DialogTitle>
+          <DialogTitle className="text-foreground">Adicionar Novo Domínio</DialogTitle>
           <DialogDescription>
-            Enter the details to start monitoring a new domain.
+            Configure os detalhes do domínio que deseja monitorar, incluindo o nome, URL e intervalo de verificação.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="domain-name" className="text-foreground">Domain Name</Label>
+            <Label htmlFor="domain-name" className="text-foreground">Nome do Domínio</Label>
             <Input
               id="domain-name"
               placeholder="My Website"
@@ -76,24 +76,19 @@ export function AddDomainModal({ open, onOpenChange, onAdd }: AddDomainModalProp
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="check-interval" className="text-foreground">Check Interval</Label>
+            <Label htmlFor="check-interval" className="text-foreground">Checar Intervalo</Label>
             <Select value={interval} onValueChange={setInterval}>
               <SelectTrigger id="check-interval">
                 <SelectValue placeholder="Select interval" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="1">Every 1 minute</SelectItem>
-                <SelectItem value="3">Every 3 minutes</SelectItem>
-                <SelectItem value="5">Every 5 minutes</SelectItem>
-                <SelectItem value="10">Every 10 minutes</SelectItem>
-                <SelectItem value="15">Every 15 minutes</SelectItem>
-                <SelectItem value="30">Every 30 minutes</SelectItem>
+                <SelectItem value="1">A cada 1 minuto</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <DialogFooter className="gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="text-foreground">
-              Cancel
+              Cancelar
             </Button>
             <Button type="submit" className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={loading}>
               {loading ? "Adding..." : "Add Domain"}
