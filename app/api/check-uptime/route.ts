@@ -4,7 +4,7 @@ import * as tls from "tls";
 import * as net from "net";
 
 const CONFIRMATION_THRESHOLD = 3;
-const SSL_EXPIRY_WARNING_DAYS = 365; 
+const SSL_EXPIRY_WARNING_DAYS = 30; 
 
 
 async function getSSLCertificateInfo(hostname: string): Promise<{ expiry: Date | null; status: string }> {
